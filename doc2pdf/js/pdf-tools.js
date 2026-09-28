@@ -349,9 +349,14 @@
 
   function pad(n, width) { var s = String(n); while (s.length < width) s = '0' + s; return s; }
 
+  /** ค่าจากตาราง (PRESETS/FONTS) เฉพาะชื่อที่มีจริง — ชื่ออย่าง "constructor" ได้ค่าเริ่มต้น */
+  function pick(table, key, fallback) {
+    return typeof key === 'string' && Object.prototype.hasOwnProperty.call(table, key) ? table[key] : table[fallback];
+  }
+
   async function toJpeg(doc, opts) {
     opts = opts || {};
-    var preset = PRESETS[opts.preset] || PRESETS.standard;
+    var preset = pick(PRESETS, opts.preset, 'standard');
     var pages = Array.isArray(opts.pages) ? opts.pages : parsePages('', doc.numPages);
     if (!pages.length) throw new Error('ยังไม่ได้เลือกหน้า');
     if (pages.length > MAX_JPEG_PAGES) {
@@ -671,7 +676,7 @@
     var lang = OCR_LANGS.indexOf(opts.lang) >= 0 ? opts.lang : 'tha+eng';
     var canOcr = !!(window.Ocr && Ocr.isSupported());
     if (mode === 'ocr' && !canOcr) throw new Error('อ่านข้อความจากภาพ (OCR) ได้เมื่อเปิดผ่านเว็บไซต์ (https) เท่านั้น');
-    var font = FONTS[opts.font] || FONTS.sarabun;
+    var font = pick(FONTS, opts.font, 'sarabun');
     var isCancelled = typeof opts.isCancelled === 'function' ? opts.isCancelled : function () { return false; };
     var progress = typeof opts.onProgress === 'function' ? opts.onProgress : function () {};
 
@@ -745,6 +750,7 @@
     toDocx: toDocx,
     // สำหรับทดสอบ
     _buildLines: buildLines,
+    _pick: pick,
     _buildParagraphs: buildParagraphs
   };
 })();

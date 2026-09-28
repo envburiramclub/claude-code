@@ -55,7 +55,71 @@ const API = {
   xml: (text) => ctx.Docx.xml(text),
   zip: async (entries) => blobToBase64(await ctx.Zip.create(entries)),
   docx: async (opts) => blobToBase64(await ctx.Docx.create(opts)),
+  // ค่าตั้งค่าจากตาราง PRESETS/FONTS (ชื่อที่ไม่มีจริง เช่น constructor ต้องได้ค่าเริ่มต้น)
+  pick: (table, key) => ctx.PdfTools._pick(ctx.PdfTools[table], key, table === "PRESETS" ? "standard" : "sarabun"),
+  heic: heicScenario,
 };
+
+/**
+ * HeicDecoder กับ Worker จำลอง — behaviors: พฤติกรรมของ worker แต่ละตัวตามลำดับที่ถูกสร้าง
+ *   'ok' ตอบผลปกติ, 'hang' ไม่ตอบเลย, 'crash' ล่มพร้อมข้อความ (เช่น หน่วยความจำไม่พอ), 'load' โหลดสคริปต์ไม่ได้ (ไม่มีข้อความ)
+ * files: จำนวนไฟล์ที่ถอดรหัสพร้อมกัน — คืนผลของแต่ละไฟล์ จำนวน worker ที่สร้าง และจำนวนครั้งที่ถอดรหัสในหน้าเว็บ
+ */
+async function heicScenario(behaviors, files) {
+  const log = { workers: 0, inline: 0 };
+  const hc = {
+    console: { warn() {}, error() {}, log() {} },
+    Promise, Object, Number, String, Math, Blob, ArrayBuffer, Uint8Array, Uint8ClampedArray,
+    location: { protocol: "https:", href: "https://example.test/doc2pdf/" },
+    // เวลาจำลอง: timeout ยาว ๆ (120 วินาที) ครบใน 20 ms
+    setTimeout: (fn, ms) => setTimeout(fn, ms > 1000 ? 20 : ms),
+    clearTimeout,
+  };
+  hc.window = hc;
+  hc.self = hc;
+  hc.globalThis = hc;
+  hc.ImageData = class {
+    constructor(a, b, c) {
+      if (typeof a === "number") Object.assign(this, { width: a, height: b, data: new Uint8ClampedArray(a * b * 4) });
+      else Object.assign(this, { data: a, width: b, height: c });
+    }
+  };
+  const fakeLibheif = () => ({
+    HeifDecoder: class {
+      decode() {
+        log.inline++;
+        return [{ get_width: () => 2, get_height: () => 2, display: (out, done) => done(out), free() {} }];
+      }
+    },
+  });
+  hc.AppPlatform = {
+    resolve: (p) => Promise.resolve("https://example.test/doc2pdf/" + p),
+    loadScript: () => { hc.libheif = fakeLibheif; return Promise.resolve(); },
+  };
+  let made = 0;
+  hc.Worker = class {
+    constructor() { this.kind = behaviors[made++] || "ok"; this.dead = false; log.workers++; }
+    postMessage(msg) {
+      setTimeout(() => {
+        if (this.dead) return;
+        if (this.kind === "ok") this.onmessage({ data: { type: "result", id: msg.id, width: 1, height: 1, data: new ArrayBuffer(4) } });
+        else if (this.kind === "crash") this.onerror({ message: "Uncaught RangeError: Out of memory", preventDefault() {} });
+        else if (this.kind === "load") this.onerror({ preventDefault() {} });
+      }, 5);
+    }
+    terminate() { this.dead = true; }
+  };
+  vm.createContext(hc);
+  vm.runInContext(fs.readFileSync(path.join(JS, "heic.js"), "utf8"), hc, { filename: "heic.js" });
+  // ส่วนหัวไฟล์ HEIC: กล่อง ftyp แบรนด์ heic
+  const header = new Uint8Array([0, 0, 0, 24, 0x66, 0x74, 0x79, 0x70, 0x68, 0x65, 0x69, 0x63, 0, 0, 0, 0,
+    0x6d, 0x69, 0x66, 0x31, 0x68, 0x65, 0x69, 0x63]);
+  const results = await Promise.all(Array.from({ length: files }, () => hc.HeicDecoder.decode(new Blob([header]), 1e6).then(
+    (img) => ({ ok: true, width: img.width }),
+    (e) => ({ ok: false, error: e.message, fromWorker: !!e.fromWorker, retryWorker: !!e.retryWorker }),
+  )));
+  return { results, workers: log.workers, inline: log.inline };
+}
 
 async function run(request) {
   const start = process.hrtime.bigint();

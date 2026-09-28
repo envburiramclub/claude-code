@@ -174,6 +174,45 @@ class Doc2pdfTest(unittest.TestCase):
         self.assertEqual(fonts.get(W + "ascii"), 'F" onload="x')  # ชื่อฟอนต์อยู่ใน attribute เดียว ไม่แทรก attribute ใหม่
         self.assertEqual(len(fonts.attrib), 4)
 
+    # -- ถอดรหัส HEIC ใน worker ---------------------------------------------------
+
+    def test_heic_file_that_hangs_or_crashes_worker_is_not_retried_on_page(self):
+        # ไฟล์ที่ทำให้ worker ค้างหรือล่ม ถ้าถอดรหัสซ้ำในหน้าเว็บ หน้าเว็บจะค้าง/ล่มตาม
+        for kind in ("hang", "crash"):
+            with self.subTest(worker=kind):
+                value, _ = self.call("heic", [kind], 1)
+                self.assertEqual(value["inline"], 0)
+                self.assertFalse(value["results"][0]["ok"])
+                self.assertTrue(value["results"][0]["fromWorker"])
+
+    def test_heic_other_files_retry_in_new_worker(self):
+        # ไฟล์ที่รอคิวอยู่ตอน worker ถูกปิดเพราะไฟล์อื่น ต้องถอดรหัสได้ใน worker ตัวใหม่
+        for kind in ("hang", "crash"):
+            with self.subTest(worker=kind):
+                value, _ = self.call("heic", [kind, "ok"], 2)
+                first, second = value["results"]
+                self.assertTrue(first["fromWorker"])
+                self.assertTrue(second["ok"], second)
+                self.assertEqual((value["workers"], value["inline"]), (2, 0))
+
+    def test_heic_falls_back_to_page_only_when_worker_cannot_load(self):
+        value, _ = self.call("heic", ["load"], 1)
+        self.assertTrue(value["results"][0]["ok"])
+        self.assertEqual(value["inline"], 1)
+        value, _ = self.call("heic", ["ok"], 1)
+        self.assertEqual((value["results"][0]["ok"], value["inline"]), (True, 0))
+
+    # -- ค่าตั้งค่าที่จำไว้ใน localStorage ---------------------------------------------
+
+    def test_settings_must_be_real_table_entries(self):
+        # localStorage ใช้ร่วมกับทุกแอปใต้ envburiramclub.github.io ค่าอย่าง "constructor" ต้องได้ค่าเริ่มต้น
+        self.assertEqual(self.call("pick", "PRESETS", "high")[0]["dpi"], 300)
+        self.assertEqual(self.call("pick", "FONTS", "tahoma")[0]["name"], "Tahoma")
+        for key in ("constructor", "__proto__", "toString", "hasOwnProperty", ""):
+            with self.subTest(key=key):
+                self.assertEqual(self.call("pick", "PRESETS", key)[0]["dpi"], 150)
+                self.assertEqual(self.call("pick", "FONTS", key)[0]["name"], "TH Sarabun New")
+
     def test_xml_escape(self):
         self.assertEqual(self.call("xml", '<&>"\x00\x0b\ud800x')[0], "&lt;&amp;&gt;&quot;x")
 

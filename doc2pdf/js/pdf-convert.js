@@ -329,14 +329,17 @@
     });
   }
 
+  /** ค่าที่อ่านจาก localStorage (ทุกแอปใต้โดเมน github.io เดียวกันเขียนได้) ต้องเป็นชื่อในตารางจริง ไม่ใช่ constructor ฯลฯ */
+  function own(table, key) { return typeof key === 'string' && Object.prototype.hasOwnProperty.call(table, key); }
+
   function bind() {
     try {
       var f = localStorage.getItem('pdfConvertFormat');
       if (f === 'jpg' || f === 'docx') S.format = f;
       var q = localStorage.getItem('pdfJpegQuality');
-      if (PdfTools.PRESETS[q]) $('pdfQuality').value = q;
+      if (own(PdfTools.PRESETS, q)) $('pdfQuality').value = q;
       var font = localStorage.getItem('pdfDocxFont');
-      if (PdfTools.FONTS[font]) $('pdfFont').value = font;
+      if (own(PdfTools.FONTS, font)) $('pdfFont').value = font;
       var lang = localStorage.getItem('ocrLang');
       if (OCR_LANGS.indexOf(lang) >= 0) $('pdfLang').value = lang;
     } catch (_) { /* ignore */ }

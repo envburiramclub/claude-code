@@ -58,9 +58,23 @@
 
   // ---------------------------------------------------------------- Worker
 
-  function failAll(err) {
-    Object.keys(jobs).forEach(function (id) { jobs[id].reject(err); });
+  /**
+   * ยกเลิกทุกงานที่ค้างใน worker (worker ถูกปิดแล้ว)
+   * blame: 'load' = โหลด worker ไม่ได้ → ให้ decode() ลองในหน้าเว็บ
+   *        'crash' = worker ล่มระหว่างถอดรหัส → ไฟล์ที่กำลังถอดรหัส (งานเก่าสุด) ห้ามลองซ้ำ ไฟล์ที่รอคิวลองใหม่ใน worker ตัวใหม่
+   *        'others' = ปิด worker เพราะไฟล์อื่นค้าง → ทุกงานที่เหลือลองใหม่ใน worker ตัวใหม่
+   */
+  function failAll(message, blame) {
+    var pending = jobs;
     jobs = {};
+    Object.keys(pending).map(Number).sort(function (a, b) { return a - b; }).forEach(function (id, i) {
+      var job = pending[id];
+      clearTimeout(job.timer); // ไม่งั้นครบเวลาภายหลังแล้วไปปิด worker ตัวใหม่
+      var err = codeError(message);
+      if (blame === 'crash' && i === 0) err.fromWorker = true;
+      else if (blame !== 'load') err.retryWorker = true;
+      job.reject(err);
+    });
   }
 
   function stopWorker() {
@@ -94,9 +108,10 @@
       };
       w.onerror = function (e) {
         if (e && e.preventDefault) e.preventDefault();
-        var err = codeError((e && e.message) || 'ตัวถอดรหัส HEIC ทำงานผิดพลาด');
         stopWorker();
-        failAll(err);
+        // มีข้อความ = worker ทำงานแล้วล่มระหว่างถอดรหัส (เช่น หน่วยความจำไม่พอกับไฟล์นั้น) ห้ามถอดรหัสไฟล์เดิมซ้ำในหน้าเว็บ
+        // ไม่งั้นแท็บค้าง/ล่มตาม — ไม่มีข้อความ = โหลดสคริปต์ worker ไม่ได้ → ให้ decode() ลองในหน้าเว็บแทน
+        failAll((e && e.message) || 'ตัวถอดรหัส HEIC ทำงานผิดพลาด', e && e.message ? 'crash' : 'load');
       };
       worker = w;
       return w;
@@ -105,14 +120,20 @@
 
   function decodeInWorker(blob, maxPixels) {
     return Promise.all([blob.arrayBuffer(), platform().resolve(LIB, true), getWorker()]).then(function (r) {
+      // worker อาจถูกปิดระหว่างรออ่านไฟล์ (ไฟล์อื่นทำให้ค้าง/ล่ม) — ส่งงานให้ worker ที่ปิดแล้วจะไม่มีคำตอบเลย
+      return r[2] === worker ? r : getWorker().then(function (w) { r[2] = w; return r; });
+    }).then(function (r) {
       return new Promise(function (resolve, reject) {
         var id = nextId++;
         var job = { resolve: resolve, reject: reject };
         job.timer = setTimeout(function () {
           delete jobs[id];
           stopWorker();
-          failAll(codeError('ถอดรหัส HEIC นานเกินไป'));
-          reject(codeError('ถอดรหัส HEIC นานเกินไป'));
+          failAll('ถอดรหัส HEIC ถูกยกเลิก', 'others');
+          // worker ทำงานทีละไฟล์ตามลำดับ งานที่ครบเวลาก่อนคือไฟล์ที่ทำให้ค้าง — ห้ามลองซ้ำในหน้าเว็บ (หน้าเว็บจะค้างแทน)
+          var err = codeError('ถอดรหัส HEIC นานเกินไป');
+          err.fromWorker = true;
+          reject(err);
         }, TIMEOUT_MS);
         jobs[id] = job;
         clearTimeout(idleTimer);
@@ -156,13 +177,22 @@
     return p;
   }
 
+  /** ถอดรหัสใน worker — ถ้า worker ถูกปิดเพราะไฟล์อื่น ลองใหม่ใน worker ตัวใหม่อีก 1 ครั้ง */
+  function viaWorker(blob, maxPixels, retried) {
+    return decodeInWorker(blob, maxPixels).catch(function (e) {
+      if (e && e.retryWorker && !retried) return viaWorker(blob, maxPixels, true);
+      throw e;
+    });
+  }
+
   function decode(blob, maxPixels) {
     var max = maxPixels > 0 ? maxPixels : 40e6;
     return isHeif(blob).then(function (ok) {
       if (!ok) throw codeError('ไม่ใช่ไฟล์ HEIC/HEIF', 'not-heif');
       if (typeof Worker !== 'function' || location.protocol === 'file:') return decodeInline(blob, max).then(done('inline'));
-      return decodeInWorker(blob, max).then(done('worker'), function (e) {
-        if (e && e.fromWorker) throw e; // ไฟล์เสีย/ใหญ่เกิน — ถอดรหัสในหน้าเว็บก็ไม่ได้เช่นกัน
+      return viaWorker(blob, max, false).then(done('worker'), function (e) {
+        // ไฟล์เสีย/ใหญ่เกิน/ทำให้ worker ค้างหรือล่ม — ถอดรหัสในหน้าเว็บก็ไม่ได้เช่นกัน (และจะทำให้หน้าเว็บค้างแทน)
+        if (e && (e.fromWorker || e.retryWorker)) throw e;
         // สร้าง/ใช้ worker ไม่ได้ (เช่น นโยบายของหน้าเว็บ) → ลองถอดรหัสในหน้าเว็บ
         console.warn('HEIC worker', e);
         return decodeInline(blob, max).then(done('inline'));
