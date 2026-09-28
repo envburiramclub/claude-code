@@ -23,6 +23,7 @@ import io
 import os
 import re
 import shutil
+import stat
 import sys
 import tempfile
 import unicodedata
@@ -62,8 +63,8 @@ def clean_text(value: str, multiline: bool = False) -> str:
     เก็บการขึ้นบรรทัดใหม่ไว้เฉพาะเมื่อ *multiline* เป็นจริง มิฉะนั้นช่องว่างที่ติดกัน
     (รวมถึงการขึ้นบรรทัดใหม่) จะถูกยุบเหลือช่องว่างเดียว
     """
-    value = unicodedata.normalize("NFC", value)
-    value = _STRIP_RE.sub("", _NEWLINE_RE.sub("\n", value))
+    # ทำ NFC หลังลบอักขระควบคุม เพื่อให้อักขระที่ถูกคั่นไว้ประกอบกันได้ถูกต้อง
+    value = unicodedata.normalize("NFC", _STRIP_RE.sub("", _NEWLINE_RE.sub("\n", value)))
     if multiline:
         return "\n".join(" ".join(line.split()) for line in value.split("\n")).strip("\n")
     return " ".join(value.split())
@@ -75,7 +76,7 @@ def escape_text(value: str) -> str:
     return _NEWLINE_RE.sub(lambda _m: "\\n", value)
 
 
-_FOLD_TOKEN_RE = re.compile(r"\\.|.", re.DOTALL)
+_ESCAPE_PAIR_RE = re.compile(rb"\\.", re.DOTALL)
 
 
 def fold_line(line: str, limit: int = FOLD_LIMIT) -> str:
@@ -83,24 +84,27 @@ def fold_line(line: str, limit: int = FOLD_LIMIT) -> str:
 
     ตัดเฉพาะระหว่างอักขระที่สมบูรณ์ และไม่ตัดกลาง escape ที่ขึ้นต้นด้วย backslash
     ลำดับไบต์ UTF-8 หลายไบต์ (เช่น ภาษาไทย) จึงไม่ขาด เพราะโปรแกรมนำเข้าหลายตัว
-    ต่ออักขระที่ถูกตัดข้ามบรรทัดกลับคืนไม่ได้
+    ต่ออักขระที่ถูกตัดข้ามบรรทัดกลับคืนไม่ได้ ทำงานบนไบต์โดยตรงและถอยจุดตัดไม่เกิน
+    ไม่กี่ไบต์ เวลาจึงเป็นเส้นตรงแม้ข้อความยาวหลาย MB
     """
-    if len(line.encode("utf-8")) <= limit:
+    data = line.encode("utf-8")
+    if len(data) <= limit:
         return line
-    pieces: List[str] = []
-    current: List[str] = []
-    size = 0
-    room = limit
-    for token in _FOLD_TOKEN_RE.findall(line):
-        n = len(token.encode("utf-8"))
-        if current and size + n > room:
-            pieces.append("".join(current))
-            current, size = [], 0
-            room = limit - 1  # บรรทัดต่อเนื่องขึ้นต้นด้วยช่องว่างหนึ่งตัว
-        current.append(token)
-        size += n
-    pieces.append("".join(current))
-    return "\r\n ".join(pieces)
+    # ตำแหน่งที่ห้ามตัด: ไบต์ที่ตามหลัง backslash ของ escape (\\n, \\, ...) จับคู่จากซ้ายไปขวา
+    no_cut = bytearray(len(data))
+    for match in _ESCAPE_PAIR_RE.finditer(data):
+        no_cut[match.start() + 1] = 1
+    pieces: List[bytes] = []
+    start, room = 0, limit
+    while len(data) - start > room:
+        end = start + room
+        # ถอยจุดตัดออกจากกลางอักขระ UTF-8 (ไบต์ 10xxxxxx) และกลาง escape
+        while end > start + 1 and ((data[end] & 0xC0) == 0x80 or no_cut[end]):
+            end -= 1
+        pieces.append(data[start:end])
+        start, room = end, limit - 1  # บรรทัดต่อเนื่องขึ้นต้นด้วยช่องว่างหนึ่งตัว
+    pieces.append(data[start:])
+    return b"\r\n ".join(pieces).decode("utf-8")
 
 
 def show(value: str, limit: int = 60) -> str:
@@ -122,6 +126,11 @@ def escape_controls(value: str) -> str:
         else ch
         for ch in value
     )
+
+
+def _has_hidden_chars(value: str) -> bool:
+    """มีอักขระที่มองไม่เห็น เช่น ช่องว่าง อักขระควบคุม หรือ zero-width (หมวด C*/Z* ของ Unicode) หรือไม่"""
+    return any(unicodedata.category(ch)[0] in "CZ" for ch in value)
 
 
 def _ascii_digits(value: str) -> str:
@@ -198,7 +207,8 @@ def normalize_email(raw: str) -> Optional[str]:
     value = raw.strip()
     if value[:7].lower() == "mailto:":
         value = value[7:]
-    if len(value) > _MAX_EMAIL_LEN or not _EMAIL_RE.match(value):
+    # อักขระล่องหนทำให้ "admin\u200b@bank.co.th" ดูเหมือน admin@bank.co.th แต่เป็นคนละที่อยู่
+    if len(value) > _MAX_EMAIL_LEN or _has_hidden_chars(value) or not _EMAIL_RE.match(value):
         return None
     return value
 
@@ -214,7 +224,8 @@ def normalize_url(raw: str) -> Optional[str]:
     if (
         not value
         or len(value) > _MAX_URL_LEN
-        or any(ch.isspace() or ch in _URL_FORBIDDEN for ch in value)
+        or _has_hidden_chars(value)  # ช่องว่างและอักขระล่องหนที่ใช้ปลอมชื่อโดเมน
+        or any(ch in _URL_FORBIDDEN for ch in value)
     ):
         return None
     match = _URL_SCHEME_RE.match(value)
@@ -496,6 +507,7 @@ def build_contact(
     """แปลง CSV หนึ่งแถวเป็น Contact หรือคืน None ถ้าไม่มีข้อมูลที่ใช้ได้"""
     contact = Contact()
     groups: Dict[Tuple, Tuple[Column, Dict[str, List[str]]]] = {}
+    notes: List[str] = []  # ต่อครั้งเดียวตอนท้าย (ต่อ string ซ้ำ ๆ ในลูปใช้เวลาแบบกำลังสอง)
 
     for index, column in columns:
         # columns เรียงตาม index จากน้อยไปมาก หยุดเมื่อเลยช่องสุดท้ายของแถว ไม่เช่นนั้น
@@ -517,13 +529,17 @@ def build_contact(
                     warn(line, f"ข้ามวันเกิดที่อ่านไม่ออก {show(raw)} (ใช้รูปแบบ YYYY-MM-DD หรือ DD/MM/YYYY)")
         elif column.kind == "note":
             text = clean_text(raw, multiline=True)
-            contact.note = f"{contact.note}\n{text}" if contact.note else text
+            if text:
+                notes.append(text)
         else:
             _, fields = groups.setdefault(column.group, (column, {}))
             fields.setdefault(column.attr, []).append(raw)
 
+    contact.note = "\n".join(notes)
+    # ใช้ set ตรวจค่าซ้ำ (ค้นใน list ใช้เวลาแบบกำลังสองเมื่อแถวมีค่าหลายหมื่นค่า)
     seen_phones = set()
     seen_emails = set()
+    seen_urls = set()
     for column, fields in groups.values():
         types = list(column.types)
         for label in fields.get("type", []):
@@ -557,7 +573,8 @@ def build_contact(
                     url = normalize_url(part)
                     if url is None:
                         warn(line, f"ข้าม URL ที่ไม่ปลอดภัยหรือไม่ถูกต้อง {show(part)} (รองรับเฉพาะ http/https)")
-                    elif url not in contact.urls:
+                    elif url not in seen_urls:
+                        seen_urls.add(url)
                         contact.urls.append(url)
         elif column.kind == "adr":
             address = _build_address(fields, types_t)
@@ -652,12 +669,21 @@ def contact_to_vcard(contact: Contact) -> str:
 # --------------------------------------------------------------------------
 
 
+# ไฟล์ .xlsx (ZIP) และ .xls (OLE2) ซึ่งผู้ใช้มักใส่มาแทน CSV
+_EXCEL_SIGNATURES = (b"PK\x03\x04", b"\xd0\xcf\x11\xe0\xa1\xb1\x1a\xe1")
+
+
 def decode_csv_bytes(data: bytes, encoding: str = "auto") -> Tuple[str, str]:
     """ถอดรหัสไบต์ของไฟล์ CSV คืนค่า ``(text, encoding_used)``
 
     โหมด ``auto`` ใช้ BOM ของ UTF-8/UTF-16 ถ้ามี จากนั้นลอง UTF-8 แล้วจึงลองภาษาไทย
     Windows (cp874) ซึ่งเป็นค่าที่ Excel บน Windows ภาษาไทยใช้บันทึกโดยปริยาย
     """
+    if data.startswith(_EXCEL_SIGNATURES):
+        raise ConversionError(
+            "ไฟล์นี้เป็นไฟล์ Excel (.xlsx/.xls) หรือไฟล์บีบอัด ไม่ใช่ CSV "
+            'ให้เปิดใน Excel แล้วบันทึกเป็น "CSV UTF-8" ก่อน'
+        )
     try:
         if encoding != "auto":
             return data.decode(encoding), encoding
@@ -757,7 +783,20 @@ def iter_vcards(
             stats.written += 1
             yield contact_to_vcard(contact)
     except csv.Error as exc:
-        raise ConversionError(f"อ่านไฟล์ CSV ไม่ได้ที่บรรทัด {reader.line_num}: {exc}") from exc
+        raise ConversionError(
+            f"อ่านไฟล์ CSV ไม่ได้ที่บรรทัด {reader.line_num}: {_translate_csv_error(str(exc))}"
+        ) from exc
+
+
+def _translate_csv_error(message: str) -> str:
+    """แปลข้อความผิดพลาดภาษาอังกฤษของโมดูล csv เป็นภาษาไทย (ข้อความอื่นแสดงตามเดิม)"""
+    if "field larger than field limit" in message:
+        return f"ข้อมูลในช่องเดียวยาวเกิน {csv.field_size_limit():,} ตัวอักษร"
+    if "unexpected end of data" in message:
+        return 'ไฟล์จบกลางข้อมูล อาจมีเครื่องหมายคำพูด " ที่ไม่ได้ปิด'
+    if "expected after" in message:
+        return 'มีข้อความต่อท้ายเครื่องหมายคำพูดปิด (ถ้าข้อความมี " ต้องเขียนเป็น "")'
+    return escape_controls(message)
 
 
 # --------------------------------------------------------------------------
@@ -790,6 +829,17 @@ def _check_output_path(output: str, force: bool, input_path: Optional[str]) -> N
         raise ConversionError(f"ไม่พบโฟลเดอร์ของไฟล์ผลลัพธ์ {show(output, PATH_SHOW_LIMIT)}")
     if not os.path.lexists(output):
         return
+    try:
+        target = os.stat(output)  # ตามลิงก์สัญลักษณ์ไปยังไฟล์จริง
+    except OSError:
+        target = None  # ลิงก์เสียที่ชี้ไปยังไฟล์ที่ไม่มีอยู่
+    if target is not None and not stat.S_ISREG(target.st_mode):
+        # os.replace จะแทนที่ไฟล์พิเศษทั้งตัว ถ้ารันด้วยสิทธิ์ root แล้วสั่ง
+        # -o /dev/null --force จะทำลาย /dev/null ของทั้งระบบ จึงห้ามแม้ใส่ --force
+        raise ConversionError(
+            f"{show(output, PATH_SHOW_LIMIT)} ไม่ใช่ไฟล์ธรรมดา (เช่น อุปกรณ์หรือ FIFO) จึงเขียนทับไม่ได้ "
+            "ถ้าต้องการส่งออกทางเอาต์พุตมาตรฐาน ให้ใช้ -o -"
+        )
     if input_path and input_path != "-":
         try:
             same = os.path.samefile(output, input_path)
@@ -864,8 +914,8 @@ def _delimiter_arg(value: str) -> str:
 
 
 def _country_code_arg(value: str) -> str:
-    value = value.strip().lstrip("+")
-    if not re.fullmatch(r"[1-9]\d{0,2}", value):
+    value = _ascii_digits(value).strip().lstrip("+")
+    if not re.fullmatch(r"[1-9][0-9]{0,2}", value):  # \d จะรับตัวเลขทุกภาษา จึงระบุ 0-9
         raise argparse.ArgumentTypeError("ต้องเป็นตัวเลข 1-3 หลัก เช่น 66")
     return value
 

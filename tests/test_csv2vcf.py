@@ -299,6 +299,17 @@ class FieldNormalisationTest(unittest.TestCase):
         self.assertEqual(csv2vcf.normalize_phone("+66(0)81-234-5678")[0], "+66 81-234-5678")
         self.assertEqual(csv2vcf.normalize_phone("(02) 123-4567")[0], "(02) 123-4567")
 
+    def test_hidden_characters_are_rejected_in_emails_and_urls(self):
+        # อักขระล่องหนทำให้ที่อยู่ปลอมดูเหมือนของจริง เช่น admin@bank.co.th
+        for email in ("admin\u200b@bank.co.th", "admin@bank\u2060.co.th", "a\u00ad@b.co"):
+            self.assertIsNone(csv2vcf.normalize_email(email), repr(email))
+        for url in ("https://bank.co.th\u2060.evil.example/", "https://bank\u200b.co.th", "https://pay\u00adpal.com"):
+            self.assertIsNone(csv2vcf.normalize_url(url), repr(url))
+        self.assertEqual(csv2vcf.normalize_email("ผู้ใช้@ตัวอย่าง.ไทย"), "ผู้ใช้@ตัวอย่าง.ไทย")
+
+    def test_nfc_is_applied_after_removing_control_characters(self):
+        self.assertEqual(csv2vcf.clean_text("e\x01\u0301"), "\u00e9")
+
     def test_invalid_phones(self):
         for raw in ("12", "abc", "8.12345678E+08", "1" * 41, "---"):
             phone, warning = csv2vcf.normalize_phone(raw)
@@ -460,6 +471,40 @@ class InputHandlingTest(unittest.TestCase):
         with self.assertRaises(csv2vcf.ConversionError):
             convert("Name,Phone\nA,081\x00\n")
 
+    def test_excel_files_are_detected(self):
+        for data in (b"PK\x03\x04" + b"\x00" * 20, b"\xd0\xcf\x11\xe0\xa1\xb1\x1a\xe1" + b"\x00" * 20):
+            with self.assertRaises(csv2vcf.ConversionError) as ctx:
+                csv2vcf.decode_csv_bytes(data)
+            self.assertIn("Excel", str(ctx.exception))
+
+    def test_csv_errors_are_thai(self):
+        cases = {
+            'Name,Phone\n"Bob,0811111111\n': "ไม่ได้ปิด",
+            'Name,Phone\n"Bob"x,0811111111\n': "ต่อท้ายเครื่องหมายคำพูดปิด",
+            'Name,Notes\nA,"' + "x" * 200000 + '"\n': "ยาวเกิน",
+        }
+        for text, expected in cases.items():
+            with self.assertRaises(csv2vcf.ConversionError) as ctx:
+                convert(text)
+            self.assertIn(expected, str(ctx.exception))
+            for english in ("unexpected end of data", "expected after", "field limit"):
+                self.assertNotIn(english, str(ctx.exception))
+
+    def test_many_urls_and_notes_in_one_row_are_linear(self):
+        # โค้ดเดิมตรวจ URL ซ้ำด้วย list และต่อหมายเหตุทีละคอลัมน์ ทั้งคู่ใช้เวลาแบบกำลังสอง
+        # (40,000 URL ใช้ 6 วินาที, หมายเหตุ 20,000 คอลัมน์ใช้ 4.5 วินาที)
+        import time
+
+        urls = ",".join(["Name"] + ["Website"] * 40) + "\nA," + ",".join(
+            ":::".join("a%d-%d.co" % (k, i) for i in range(1000)) for k in range(40)
+        ) + "\n"
+        notes = ",".join(["Name"] + ["Notes"] * 20000) + "\nA," + ",".join(["x" * 200] * 20000) + "\n"
+        for text, budget in ((urls, 2.5), (notes, 2.0)):
+            start = time.perf_counter()
+            vcf, _ = convert(text)
+            self.assertLess(time.perf_counter() - start, budget)
+            assert_well_formed(self, vcf)
+
     def test_malformed_csv_is_rejected(self):
         with self.assertRaises(csv2vcf.ConversionError):
             convert('Name,Phone\n"Bob,0811111111\nAlice,0822222222\n')
@@ -529,6 +574,57 @@ class CommandLineTest(unittest.TestCase):
         code, _ = self.run_main(self.csv_path, "-o", link, "--force")
         self.assertEqual(code, 1)
         self.assertEqual(self.read(self.csv_path), original)
+
+    @unittest.skipUnless(hasattr(os, "mkfifo"), "ต้องใช้ FIFO")
+    def test_force_never_replaces_special_files(self):
+        # ถ้ารันด้วยสิทธิ์ root แล้วสั่ง -o /dev/null --force โค้ดเดิมจะแทนที่ /dev/null ทั้งตัว
+        fifo = os.path.join(self.dir, "pipe.vcf")
+        os.mkfifo(fifo)
+        code, err = self.run_main(self.csv_path, "-o", fifo, "--force")
+        self.assertEqual(code, 1)
+        self.assertTrue(stat.S_ISFIFO(os.lstat(fifo).st_mode))
+        self.assertIn("ไม่ใช่ไฟล์ธรรมดา", err)
+
+    @unittest.skipUnless(hasattr(os, "symlink"), "symlinks not supported")
+    def test_force_never_replaces_links_to_devices(self):
+        link = os.path.join(self.dir, "null.vcf")
+        try:
+            os.symlink(os.devnull, link)
+        except OSError:
+            self.skipTest("cannot create symlink")
+        code, err = self.run_main(self.csv_path, "-o", link, "--force")
+        self.assertEqual(code, 1)
+        self.assertTrue(os.path.islink(link))
+        self.assertIn("ไม่ใช่ไฟล์ธรรมดา", err)
+
+    @unittest.skipUnless(hasattr(os, "symlink"), "symlinks not supported")
+    def test_force_replaces_dangling_symlink(self):
+        link = os.path.join(self.dir, "dangling.vcf")
+        try:
+            os.symlink(os.path.join(self.dir, "missing-target"), link)
+        except OSError:
+            self.skipTest("cannot create symlink")
+        code, err = self.run_main(self.csv_path, "-o", link, "--force")
+        self.assertEqual(code, 0, err)
+        self.assertFalse(os.path.islink(link))
+        self.assertFalse(os.path.exists(os.path.join(self.dir, "missing-target")))
+
+    def test_country_code_accepts_thai_digits_but_stores_ascii(self):
+        for value in ("๖๖", "+๖๖", "6๖", "66"):
+            self.assertEqual(csv2vcf._country_code_arg(value), "66", value)
+        import argparse
+
+        for value in ("0", "1234", "abc", "๐"):
+            with self.assertRaises(argparse.ArgumentTypeError):
+                csv2vcf._country_code_arg(value)
+
+    def test_excel_file_message(self):
+        with open(self.csv_path, "wb") as fh:
+            fh.write(b"PK\x03\x04" + b"\x00" * 100)
+        code, err = self.run_main(self.csv_path)
+        self.assertEqual(code, 1)
+        self.assertIn("CSV UTF-8", err)
+        self.assertNotIn("UTF-16", err)
 
     def test_output_is_a_directory(self):
         code, _ = self.run_main(self.csv_path, "-o", self.dir, "--force")
