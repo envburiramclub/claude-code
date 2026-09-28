@@ -1,8 +1,8 @@
-// ตัวกลางให้ tests/test_static_site.py เรียกโค้ด JavaScript ของเว็บไซต์ (docs/csv2vcf.js)
+// ตัวกลางให้ tests/test_static_site.py เรียกโค้ด JavaScript ของเว็บไซต์ (csv2vcf.js)
 // อ่านรายการคำขอ JSON จาก stdin แล้วเขียนผลลัพธ์ JSON ออก stdout ตามลำดับเดียวกัน
 "use strict";
 const path = require("path");
-const C = require(path.join(__dirname, "..", "docs", "csv2vcf.js"));
+const C = require(path.join(__dirname, "..", "csv2vcf.js"));
 
 function decodeArg(value) {
   if (value && typeof value === "object" && typeof value.__bytes__ === "string") {

@@ -1,0 +1,60 @@
+<!doctype html>
+<html lang="th">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="light dark">
+  <!-- GitHub Pages ตั้ง header เองไม่ได้ จึงกำหนด CSP ที่นี่ หน้านี้ไม่มีสคริปต์เลย ใช้ได้แค่สไตล์และรูปจากเว็บนี้ -->
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'self'; img-src 'self'; base-uri 'none'; form-action 'none'">
+  <meta name="referrer" content="no-referrer">
+  <meta name="description" content="รวมเครื่องมือที่ใช้งานผ่านเบราว์เซอร์ได้ทันที เช่น แปลงรายชื่อ CSV เป็น vCard และสแกนเอกสารเป็น PDF">
+  <title>รวมเครื่องมือ</title>
+  <link rel="icon" href="favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="home.css">
+</head>
+<body>
+  <main class="page">
+    <header class="hero">
+      <p class="eyebrow">claude-code</p>
+      <h1>รวมเครื่องมือ</h1>
+      <p class="lead">เลือกเครื่องมือที่ต้องการ ใช้งานผ่านเบราว์เซอร์ได้ทันทีทั้งบนคอมพิวเตอร์และมือถือ ไม่ต้องติดตั้งโปรแกรม</p>
+    </header>
+
+    <!-- หนึ่งการ์ดต่อหนึ่งโฟลเดอร์ของระบบ ลิงก์ไปที่ <โฟลเดอร์>/index.html
+         เพิ่มระบบใหม่ต้องเพิ่มการ์ดที่นี่ (tests/test_home.py ตรวจว่าครบทุกโฟลเดอร์) -->
+    <ul class="apps">
+      <li>
+        <a class="app" href="csv2vcf/index.html">
+          <span class="app-icon teal" aria-hidden="true">
+            <svg viewBox="0 0 24 24"><circle cx="12" cy="9" r="3.6"/><path d="M5.5 19.5c1-3.6 3.5-5.3 6.5-5.3s5.5 1.7 6.5 5.3"/></svg>
+          </span>
+          <span class="app-body">
+            <span class="app-name">แปลงรายชื่อ CSV เป็น vCard</span>
+            <span class="app-desc">แปลงไฟล์รายชื่อ .csv จาก Excel, Google Contacts หรือ Outlook เป็นไฟล์ .vcf
+              สำหรับนำเข้ามือถือ Android และ iPhone แปลงในเบราว์เซอร์ ไฟล์ไม่ถูกส่งขึ้นอินเทอร์เน็ต</span>
+            <span class="app-folder">csv2vcf/</span>
+          </span>
+        </a>
+      </li>
+      <li>
+        <a class="app" href="doc2pdf/index.html">
+          <span class="app-icon blue" aria-hidden="true">
+            <svg viewBox="0 0 24 24"><path d="M3 7V4a1 1 0 0 1 1-1h3M17 3h3a1 1 0 0 1 1 1v3M21 17v3a1 1 0 0 1-1 1h-3M7 21H4a1 1 0 0 1-1-1v-3"/><path d="M7 12h10"/></svg>
+          </span>
+          <span class="app-body">
+            <span class="app-name">สแกนเอกสารเป็น PDF</span>
+            <span class="app-desc">ถ่ายภาพหรือเลือกรูปเอกสารแล้วสร้างไฟล์ PDF พร้อมครอปอัตโนมัติ ลบเงา ปรับภาพให้คมชัด
+              แปลงรูปเป็นข้อความ (OCR) และแปลงไฟล์ PDF เป็นรูป JPG หรือ Word</span>
+            <span class="app-folder">doc2pdf/</span>
+          </span>
+        </a>
+      </li>
+    </ul>
+
+    <footer class="footer">
+      <p>ซอร์สโค้ดทั้งหมดอยู่ที่
+        <a href="https://github.com/envburiramclub/claude-code" rel="noopener noreferrer">github.com/envburiramclub/claude-code</a></p>
+    </footer>
+  </main>
+</body>
+</html>

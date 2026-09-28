@@ -6,6 +6,17 @@
 (function () {
   const $ = (id) => document.getElementById(id);
   const page = $("page");
+  // webapp.py แทน __MAX_MB__ ด้วยตัวเลขตอนส่งหน้านี้ ถ้ายังไม่ถูกแทนแสดงว่าเปิดไฟล์ตรง ๆ หรือผ่าน GitHub Pages
+  // ซึ่งไม่มีเซิร์ฟเวอร์แปลงไฟล์ ห้ามส่งไฟล์รายชื่อออกไป ให้พาไปใช้เวอร์ชันที่แปลงในเบราว์เซอร์แทน
+  const servedByWebapp = /^[0-9]{1,4}$/.test(page.dataset.maxMb || "");
+  if (!servedByWebapp) {
+    $("file").disabled = true;
+    $("convert").disabled = true;
+    $("drop-title").textContent = "หน้านี้แปลงไฟล์ไม่ได้";
+    $("drop-hint").textContent = "ใช้เวอร์ชันที่แปลงในเบราว์เซอร์ตามลิงก์ด้านล่าง";
+    $("standalone").hidden = false;
+    return;
+  }
   const maxMb = Number(page.dataset.maxMb) || 10;
   const PREVIEW_LIMIT = 20;
   const PREVIEW_SCAN_CHARS = 300000; // อ่านแค่ส่วนต้นของไฟล์ผลลัพธ์เพื่อทำตัวอย่าง
@@ -114,7 +125,7 @@
 
     let response;
     try {
-      response = await fetch("/api/convert?" + params.toString(), {
+      response = await fetch("api/convert?" + params.toString(), {
         method: "POST",
         headers: { "Content-Type": "application/octet-stream", "X-Requested-With": "csv2vcf" },
         body: selected,

@@ -1,6 +1,6 @@
-"""เทสต์เว็บไซต์ GitHub Pages (docs/)
+"""เทสต์เว็บไซต์ GitHub Pages (index.html, app.js, worker.js, csv2vcf.js ในโฟลเดอร์ csv2vcf/)
 
-docs/csv2vcf.js เป็นโค้ดที่ port มาจาก csv2vcf.py เทสต์นี้ส่งข้อมูลชุดเดียวกันให้ทั้งสองภาษา
+csv2vcf.js เป็นโค้ดที่ port มาจาก csv2vcf.py เทสต์นี้ส่งข้อมูลชุดเดียวกันให้ทั้งสองภาษา
 แล้วเทียบผลทุกไบต์ รวมถึงคำเตือนและข้อความผิดพลาด ต้องมี Node.js (ถ้าไม่มีจะข้ามเทสต์)
 """
 
@@ -24,7 +24,9 @@ sys.path.insert(0, os.path.join(ROOT, "tools"))
 import csv2vcf  # noqa: E402
 import webapp  # noqa: E402
 
-DOCS = os.path.join(ROOT, "docs")
+# หน้าเว็บ GitHub Pages อยู่ในโฟลเดอร์เดียวกับ csv2vcf.py (เผยแพร่ที่ /claude-code/csv2vcf/)
+SITE = ROOT
+WEB = os.path.join(ROOT, "web")
 NODE = shutil.which("node")
 HARNESS = os.path.join(ROOT, "tests", "js_harness.js")
 
@@ -296,7 +298,7 @@ class DataFileTest(unittest.TestCase):
         # ถ้าแก้ตารางใน csv2vcf.py แล้วลืมรัน tools/build_js_data.py เทสต์นี้จะเตือน
         import build_js_data
 
-        with open(os.path.join(DOCS, "csv2vcf-data.js"), encoding="utf-8") as fh:
+        with open(os.path.join(SITE, "csv2vcf-data.js"), encoding="utf-8") as fh:
             current = fh.read()
         match = re.search(r"var DATA = (\{.*\});\n", current)
         self.assertIsNotNone(match)
@@ -313,16 +315,16 @@ class DataFileTest(unittest.TestCase):
 
 class StaticFilesTest(unittest.TestCase):
     def read(self, name):
-        with open(os.path.join(DOCS, name), encoding="utf-8") as fh:
+        with open(os.path.join(SITE, name), encoding="utf-8") as fh:
             return fh.read()
 
     def test_required_files_exist(self):
         for name in ("index.html", "style.css", "app.js", "worker.js", "csv2vcf.js", "csv2vcf-data.js",
-                     "example.csv", "favicon.svg", ".nojekyll"):
-            self.assertTrue(os.path.isfile(os.path.join(DOCS, name)), name)
+                     "example.csv", "favicon.svg"):
+            self.assertTrue(os.path.isfile(os.path.join(SITE, name)), name)
 
     def test_example_matches_repository_example(self):
-        with open(os.path.join(ROOT, "examples", "contacts.csv"), "rb") as a, open(os.path.join(DOCS, "example.csv"), "rb") as b:
+        with open(os.path.join(ROOT, "examples", "contacts.csv"), "rb") as a, open(os.path.join(SITE, "example.csv"), "rb") as b:
             self.assertEqual(a.read(), b.read())
 
     def test_content_security_policy(self):
@@ -354,13 +356,39 @@ class StaticFilesTest(unittest.TestCase):
             network = re.search(r"\bfetch\(|XMLHttpRequest|sendBeacon|WebSocket|EventSource", code)
             self.assertIsNone(network, "%s เชื่อมต่อเครือข่าย" % name)
 
+    def test_links_back_to_home_page(self):
+        # หน้าหลักของ repo (../index.html) รวมลิงก์ทุกระบบ หน้านี้ต้องมีลิงก์กลับ
+        self.assertIn('href="../index.html"', self.read("index.html"))
+        self.assertTrue(os.path.isfile(os.path.join(ROOT, "..", "index.html")))
+
+    def test_both_sites_share_one_stylesheet(self):
+        # web/ (webapp.py) กับหน้า GitHub Pages ใช้ style.css ชุดเดียวกัน แก้ที่หนึ่งต้องแก้อีกที่
+        with open(os.path.join(SITE, "style.css"), "rb") as a, open(os.path.join(WEB, "style.css"), "rb") as b:
+            self.assertEqual(a.read(), b.read())
+
+    def test_server_page_refuses_to_run_without_webapp(self):
+        # web/index.html ถูกเผยแพร่บน GitHub Pages ด้วย (ที่ csv2vcf/web/) แต่ที่นั่นไม่มี /api/convert
+        # หน้านั้นต้องไม่ส่งไฟล์ไปไหน และพาไปใช้เวอร์ชันที่แปลงในเบราว์เซอร์แทน
+        page = self.read(os.path.join("web", "index.html"))
+        self.assertIn('data-max-mb="__MAX_MB__"', page)
+        self.assertRegex(page, r'<p class="status error" id="standalone" hidden>[^<]*<a href="\.\./index\.html">')
+        for url in re.findall(r'(?:href|src)="([^"]+)"', page):
+            # URL แบบ relative ใช้ได้ทั้งที่ / ของ webapp.py และใต้ /claude-code/csv2vcf/web/ บน GitHub Pages
+            self.assertFalse(url.startswith("/"), url)
+        code = self.read(os.path.join("web", "app.js"))
+        guard = code.index("if (!servedByWebapp)")
+        self.assertLess(guard, code.index("addEventListener"), "ต้องตรวจก่อนผูก event ใด ๆ")
+        self.assertLess(guard, code.index("fetch("))
+        self.assertIn('fetch("api/convert?"', code)
+
     def test_no_hidden_characters_in_sources(self):
-        for name in os.listdir(DOCS):
-            if name.endswith((".html", ".css", ".js", ".svg", ".csv")):
-                text = self.read(name)
-                hidden = [hex(ord(ch)) for ch in text if unicodedata.category(ch) in ("Cf", "Zl", "Zp", "Co")
-                          or (unicodedata.category(ch) == "Cc" and ch not in "\n\t\r")]
-                self.assertEqual(hidden, [], name)
+        for folder in (SITE, WEB):
+            for name in os.listdir(folder):
+                if name.endswith((".html", ".css", ".js", ".svg", ".csv", ".md")):
+                    text = self.read(os.path.join(folder, name))
+                    hidden = [hex(ord(ch)) for ch in text if unicodedata.category(ch) in ("Cf", "Zl", "Zp", "Co")
+                              or (unicodedata.category(ch) == "Cc" and ch not in "\n\t\r")]
+                    self.assertEqual(hidden, [], name)
 
 
 if __name__ == "__main__":

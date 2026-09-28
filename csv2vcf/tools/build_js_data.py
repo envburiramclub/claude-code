@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
-"""สร้าง docs/csv2vcf-data.js จากตารางข้อมูลใน csv2vcf.py
+"""สร้าง csv2vcf-data.js จากตารางข้อมูลใน csv2vcf.py
 
-เว็บไซต์บน GitHub Pages (โฟลเดอร์ docs/) แปลงไฟล์ด้วย JavaScript ในเบราว์เซอร์ ตารางข้อมูล
+เว็บไซต์บน GitHub Pages (index.html ในโฟลเดอร์ csv2vcf/) แปลงไฟล์ด้วย JavaScript ในเบราว์เซอร์ ตารางข้อมูล
 (ชื่อคอลัมน์ที่รู้จัก, ตัวเลขทุกภาษา, ตารางถอดรหัส cp874/tis-620/cp1252, ค่าคงที่ต่าง ๆ)
 ต้องตรงกับฝั่ง Python ทุกตัว จึงสร้างไฟล์นี้จาก Python โดยตรงแทนการพิมพ์ซ้ำ
 
@@ -24,7 +24,7 @@ sys.path.insert(0, ROOT)
 import csv2vcf  # noqa: E402
 import webapp  # noqa: E402
 
-OUTPUT = os.path.join(ROOT, "docs", "csv2vcf-data.js")
+OUTPUT = os.path.join(ROOT, "csv2vcf-data.js")
 SINGLE_BYTE_CODECS = ("cp874", "tis-620", "cp1252")
 
 

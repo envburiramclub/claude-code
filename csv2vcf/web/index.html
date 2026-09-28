@@ -5,8 +5,9 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="color-scheme" content="light dark">
   <title>แปลงรายชื่อ CSV เป็น vCard</title>
-  <link rel="stylesheet" href="/style.css">
-  <script src="/app.js" defer></script>
+  <!-- URL แบบ relative: webapp.py เปิดหน้านี้ที่ / ส่วนบน GitHub Pages ไฟล์นี้อยู่ที่ /claude-code/csv2vcf/web/ -->
+  <link rel="stylesheet" href="style.css">
+  <script src="app.js" defer></script>
 </head>
 <body>
   <main class="page" id="page" data-max-mb="__MAX_MB__">
@@ -67,6 +68,8 @@
       </details>
 
       <button class="button primary" type="submit" id="convert" disabled>แปลงไฟล์</button>
+      <p class="status error" id="standalone" hidden>หน้านี้ต้องเปิดผ่านโปรแกรม webapp.py
+        <a href="../index.html">ใช้เวอร์ชันที่แปลงในเบราว์เซอร์แทน</a></p>
       <p class="status" id="status" role="status" aria-live="polite"></p>
     </form>
 
@@ -100,7 +103,7 @@
         <code>ชื่อ</code> <code>นามสกุล</code> <code>เบอร์โทร</code> <code>มือถือ</code> <code>อีเมล</code>
         <code>บริษัท</code> <code>ที่อยู่</code> <code>จังหวัด</code> <code>วันเกิด</code>
         หรือ <code>Name</code> <code>Phone</code> <code>Email</code>
-        <a href="/example.csv" download>ดาวน์โหลดไฟล์ตัวอย่าง</a></p>
+        <a href="example.csv" download>ดาวน์โหลดไฟล์ตัวอย่าง</a></p>
       <p class="muted">เคล็ดลับ: ใน Excel ให้ตั้งคอลัมน์เบอร์โทรเป็น “ข้อความ” ก่อนบันทึกเป็น “CSV UTF-8” ไม่เช่นนั้นเลข 0 ข้างหน้าจะหายไป</p>
     </section>
 
