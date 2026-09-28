@@ -17,7 +17,7 @@ sys.path.insert(0, ROOT)
 import csv2vcf  # noqa: E402
 import webapp  # noqa: E402
 
-with open(os.path.join(ROOT, "examples", "contacts.csv"), "rb") as _fh:
+with open(os.path.join(ROOT, "example.csv"), "rb") as _fh:
     EXAMPLE = _fh.read()
 
 
@@ -97,7 +97,7 @@ class StaticPagesTest(unittest.TestCase):
     def test_unknown_and_traversal_paths(self):
         for path in (
             "/nope", "/../csv2vcf.py", "/csv2vcf.py", "/webapp.py", "/web/index.html", "/index.html",
-            "/app.js/", "//app.js", "/app.js/../webapp.py", "/examples/contacts.csv", "/.git/config",
+            "/app.js/", "//app.js", "/app.js/../webapp.py", "/csv2vcf/example.csv", "/.git/config",
         ):
             status, headers, body = call(self.app, "GET", path)
             self.assertEqual(status, 404, path)

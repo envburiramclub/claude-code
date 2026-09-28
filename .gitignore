@@ -4,5 +4,4 @@ __pycache__/
 # รายชื่อที่แปลงแล้วเป็นข้อมูลส่วนบุคคล ห้ามเก็บเข้า git
 *.vcf
 *.csv
-!csv2vcf/examples/*.csv
 !csv2vcf/example.csv

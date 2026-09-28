@@ -28,6 +28,9 @@
   var MAX_SEARCH_BYTES = 512 * 1024 * 1024;  // รวมที่ค้นหา "endstream" เองทั้งไฟล์ (สตรีมที่ /Length ผิด)
   var MAX_OBJSTM_BYTES = 256 * 1024 * 1024;  // รวม object stream ที่คลายแล้วทั้งไฟล์
   var MAX_FORM_CALLS = 10000;                // Do ของฟอร์มต่อหน้า
+  // รวมข้อมูลที่ไล่ต่อหน้า (ฟอร์มที่ถูกเรียกซ้ำนับทุกครั้ง) เท่ากับ content stream อันเดียวที่ใหญ่ที่สุดที่รับได้
+  // ไม่งั้นฟอร์มเล็ก ๆ ที่คลายแล้วใหญ่ (zip bomb) ถูกเรียกซ้ำได้ถึง MAX_FORM_CALLS ครั้ง จนหน้าเว็บค้างเป็นชั่วโมง
+  var MAX_WALK_BYTES = MAX_STREAM_BYTES;
 
   function isWS(c) { return c === 0x20 || c === 0x0A || c === 0x0D || c === 0x09 || c === 0x0C || c === 0x00; }
   function isDelim(c) {
@@ -124,7 +127,8 @@
     var start = this.p;
     while (this.p < this.end && !isWS(b[this.p]) && !isDelim(b[this.p])) this.p++;
     var word = latin1(b, start, this.p);
-    if (/^[+-]?(\d+\.?\d*|\.\d+)$/.test(word)) return { t: 'num', v: parseFloat(word) };
+    // ห้ามใช้ \d+\.?\d* — backtrack แบบกำลังสองกับตัวเลขยาว ๆ ที่ตามด้วยอักขระอื่น (ไฟล์ที่จงใจสร้างทำให้หน้าเว็บค้าง)
+    if (/^[+-]?(?:\d+(?:\.\d*)?|\.\d+)$/.test(word)) return { t: 'num', v: parseFloat(word) };
     return { t: 'kw', v: word };
   };
   /** ค่าของ PDF ที่เริ่มด้วย token tok: number, { name }, { str }, array, dict (ไม่มี prototype), { ref, gen }, { kw } */
@@ -379,7 +383,9 @@
 
   /** ไล่ content stream แบบเดียวกับ PDF.js getTextContent: BMC/BDC ตามลำดับ และเข้าไปในฟอร์ม XObject (Do) */
   Doc.prototype.walk = async function (data, resources, out, depth, chain, calls) {
-    calls = calls || { n: 0 };
+    calls = calls || { n: 0, bytes: 0 };
+    calls.bytes += data.length;
+    if (calls.bytes > MAX_WALK_BYTES) fail('page too large');
     var lx = new Lexer(data, 0, data.length, true);
     var ops = [];
     for (;;) {

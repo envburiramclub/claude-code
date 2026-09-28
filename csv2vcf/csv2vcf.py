@@ -146,7 +146,8 @@ def _ascii_digits(value: str) -> str:
 # --------------------------------------------------------------------------
 
 _PHONE_SPLIT_RE = re.compile(r":::|[;,/|\n]")
-_PHONE_EXT_RE = re.compile(r"\s*(?:ต่อ|extension|ext\.?|x)\s*(?=\d)", re.IGNORECASE)
+# ใช้ \s? ไม่ใช่ \s*: clean_text ยุบช่องว่างเหลือตัวเดียวแล้ว และ \s* ใช้เวลาแบบกำลังสองกับช่องว่างยาว ๆ
+_PHONE_EXT_RE = re.compile(r"\s?(?:ต่อ|extension|ext\.?|x)\s?(?=\d)", re.IGNORECASE)
 _EXCEL_SCI_RE = re.compile(r"^[+-]?\d+(?:\.\d+)?[eE][+-]?\d+$")
 _PHONE_ALLOWED = frozenset("0123456789+-(). *#,")
 _PHONE_PAREN_PLUS_RE = re.compile(r"^\(\s*\+\s*(\d{1,4})\s*\)")  # "(+66) 81..." -> "+66 81..."

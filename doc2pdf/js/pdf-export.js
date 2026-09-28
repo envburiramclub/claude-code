@@ -34,6 +34,14 @@
       '-' + pad2(d.getHours()) + pad2(d.getMinutes());
   }
 
+  /** ตัด ช่องว่าง . _ - หน้าชื่อ และช่องว่าง . ท้ายชื่อ — ท้ายชื่อไล่จากท้ายสตริง (/[\s.]+$/ ช้าแบบกำลังสองกับช่องว่างยาว ๆ) */
+  function trimName(n) {
+    n = n.replace(/^[\s._-]+/, '');
+    var end = n.length;
+    while (end > 0 && /[\s.]/.test(n.charAt(end - 1))) end--;
+    return n.slice(0, end);
+  }
+
   /**
    * ทำความสะอาดชื่อไฟล์: ตัดอักขระต้องห้ามของระบบไฟล์, อักขระควบคุม,
    * อักขระกลับทิศข้อความ (ป้องกันชื่อหลอก เช่น "fdp.exe") และจำกัดความยาว
@@ -41,10 +49,14 @@
   function sanitizeFilename(name) {
     var n = String(name == null ? '' : name);
     if (n.normalize) n = n.normalize('NFC');
-    n = n.replace(/[\u0000-\u001f\u007f<>:"/\\|?*‎‏‪-‮⁦-⁩]+/g, '_');
-    n = n.replace(/\.pdf$/i, '');
-    n = n.replace(/^[\s._-]+|[\s.]+$/g, '');
-    if (n.length > 100) n = n.slice(0, 100).trim();
+    n = n.replace(/[\u0000-\u001f\u007f<>:"/\\|?*\u200e\u200f\u202a-\u202e\u2066-\u2069]+/g, '_');
+    // ตัด .pdf ทั้งก่อนและหลังตัดส่วนเกินหน้า/ท้าย ("report.pdf " ต้องได้ report.pdf ไม่ใช่ report.pdf.pdf)
+    n = trimName(trimName(n.replace(/\.pdf$/i, '')).replace(/\.pdf$/i, ''));
+    if (n.length > 100) {
+      n = n.slice(0, 100);
+      if (/[\uD800-\uDBFF]$/.test(n)) n = n.slice(0, -1); // ไม่ตัดกลางอักขระ 4 ไบต์ (เช่น อีโมจิ)
+      n = n.trim();
+    }
     if (!n) n = defaultName();
     return n + '.pdf';
   }

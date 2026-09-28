@@ -86,7 +86,7 @@ python3 csv2vcf.py contacts.csv -o - > out.vcf       # ส่งผลลัพ�
 
 ถ้าไฟล์ CSV เสียกลางไฟล์ โปรแกรมจะแจ้งข้อผิดพลาดและไม่ส่งผลลัพธ์ออกมาเลย จะไม่มีไฟล์ที่มีรายชื่อแค่บางส่วน
 
-ลองกับไฟล์ตัวอย่าง: `python3 csv2vcf.py examples/contacts.csv -o -`
+ลองกับไฟล์ตัวอย่าง: `python3 csv2vcf.py example.csv -o -`
 
 | ตัวเลือก | ความหมาย |
 | --- | --- |

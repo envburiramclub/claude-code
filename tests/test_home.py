@@ -21,6 +21,8 @@ FOLDER_NAME = re.compile(r"[a-z0-9]{1,40}(?:-[a-z0-9]{1,40}){0,5}\Z")
 # ระบบที่ใช้หน้า index.html ร่วมกับแพลตฟอร์มอื่น (เวอร์ชัน Google Apps Script และแอป Android)
 # ใส่ลิงก์ ../index.html ไม่ได้เพราะที่นั่นไม่มีหน้าหลักนี้
 NO_HOME_LINK = {"doc2pdf"}
+# ไฟล์ซอร์สที่ตรวจอักขระล่องหน
+SOURCE_EXTENSIONS = (".html", ".css", ".js", ".mjs", ".py", ".md", ".svg", ".json", ".yml", ".yaml", ".csv", ".txt")
 
 
 def app_folders():
@@ -132,16 +134,27 @@ class HomePageTest(unittest.TestCase):
             self.assertIn("[`%s/`](%s/)" % (name, name), readme, "ให้เพิ่ม %s/ ในตารางของ README.md" % name)
 
     def test_no_hidden_characters(self):
-        # อักขระล่องหนหรืออักขระกลับทิศข้อความทำให้โค้ดที่เห็นไม่ตรงกับที่ทำงานจริง
-        for name in ("index.html", "home.css", "favicon.svg", "README.md", "CLAUDE.md", os.path.join("tests", "test_home.py")):
-            with self.subTest(file=name):
-                hidden = [
-                    hex(ord(ch)) for ch in read(name)
-                    if unicodedata.category(ch) in ("Cf", "Zl", "Zp", "Co")
-                    or (unicodedata.category(ch) == "Cc" and ch not in "\n\t")
-                ]
-                self.assertEqual(hidden, [])
-
+        # อักขระล่องหน อักขระกลับทิศข้อความ หรืออักขระที่ไม่ใช่ตัวอักษร ทำให้โค้ดที่เห็นไม่ตรงกับที่ทำงานจริง
+        # (Trojan Source) ทุกไฟล์ซอร์สใน repo ต้องเขียนอักขระพวกนี้เป็น \uXXXX แทน (ยกเว้นไลบรารีใน vendor/)
+        checked = 0
+        for folder, dirs, files in os.walk(ROOT):
+            dirs[:] = sorted(d for d in dirs if not d.startswith((".", "_")) and d != "vendor")
+            for name in files:
+                if not name.endswith(SOURCE_EXTENSIONS) and name not in (".gitignore",):
+                    continue
+                path = os.path.join(folder, name)
+                with open(path, encoding="utf-8") as fh:
+                    text = fh.read()
+                checked += 1
+                hidden = sorted({
+                    "U+%04X" % ord(ch) for ch in text
+                    if unicodedata.category(ch) in ("Cf", "Zl", "Zp", "Co", "Cs")
+                    or (unicodedata.category(ch) == "Cc" and ch not in "\n\t\r")
+                    or 0xFDD0 <= ord(ch) <= 0xFDEF or (ord(ch) & 0xFFFE) == 0xFFFE  # noncharacter
+                })
+                with self.subTest(file=os.path.relpath(path, ROOT)):
+                    self.assertEqual(hidden, [])
+        self.assertGreater(checked, 30)
 
 if __name__ == "__main__":
     unittest.main()

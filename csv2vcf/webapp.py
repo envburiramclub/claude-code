@@ -32,7 +32,7 @@ import csv2vcf
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 WEB_DIR = os.path.join(HERE, "web")
-EXAMPLE_CSV = os.path.join(HERE, "examples", "contacts.csv")
+EXAMPLE_CSV = os.path.join(HERE, "example.csv")
 
 DEFAULT_HOST = "127.0.0.1"
 DEFAULT_PORT = 8000

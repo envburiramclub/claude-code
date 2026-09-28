@@ -1402,7 +1402,7 @@
     if (!text) return;
     var name = ocrFilename();
     // ใส่ BOM เพื่อให้โปรแกรมอย่าง Notepad รุ่นเก่าแสดงภาษาไทยถูกต้อง
-    PdfExport.download(new Blob(['﻿' + text], { type: 'text/plain;charset=utf-8' }), name).then(function (ok) {
+    PdfExport.download(new Blob(['\ufeff' + text], { type: 'text/plain;charset=utf-8' }), name).then(function (ok) {
       setOcrNote(ok ? 'บันทึก "' + name + '" แล้ว' : 'ยังไม่ได้บันทึกไฟล์', !ok);
     }, function (e) {
       setOcrNote('บันทึกไม่สำเร็จ: ' + (e && e.message ? e.message : e), true);

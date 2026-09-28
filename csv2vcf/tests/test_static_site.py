@@ -111,7 +111,7 @@ def py_call(fn, args):
 
 # ข้อมูลทดสอบที่คัดมาเฉพาะกรณียาก (ชื่อ, ข้อมูล CSV, การตั้งค่า)
 def _fixtures():
-    with open(os.path.join(ROOT, "examples", "contacts.csv"), "rb") as fh:
+    with open(os.path.join(ROOT, "example.csv"), "rb") as fh:
         example = fh.read()
     thai = "ชื่อ,เบอร์โทร\nสมชาย,๐๘๑-๒๓๔-๕๖๗๘\n"
     cases = [
@@ -322,10 +322,6 @@ class StaticFilesTest(unittest.TestCase):
         for name in ("index.html", "style.css", "app.js", "worker.js", "csv2vcf.js", "csv2vcf-data.js",
                      "example.csv", "favicon.svg"):
             self.assertTrue(os.path.isfile(os.path.join(SITE, name)), name)
-
-    def test_example_matches_repository_example(self):
-        with open(os.path.join(ROOT, "examples", "contacts.csv"), "rb") as a, open(os.path.join(SITE, "example.csv"), "rb") as b:
-            self.assertEqual(a.read(), b.read())
 
     def test_content_security_policy(self):
         page = self.read("index.html")

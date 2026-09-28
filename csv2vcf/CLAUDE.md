@@ -10,4 +10,4 @@
   เมื่อแก้ `csv2vcf.py` ต้องแก้ `csv2vcf.js` ให้ได้ผลเหมือนกัน และรัน `python3 tools/build_js_data.py`
   ถ้าแก้ตารางข้อมูล (`tests/test_static_site.py` เทียบผลสองภาษา ต้องมี Node.js)
 - `style.css` กับ `web/style.css` ต้องเหมือนกันทุกไบต์
-- ห้าม commit ไฟล์รายชื่อจริง (`*.csv`, `*.vcf`) ยกเว้นไฟล์ตัวอย่าง `examples/contacts.csv` และ `example.csv`
+- ห้าม commit ไฟล์รายชื่อจริง (`*.csv`, `*.vcf`) ยกเว้นไฟล์ตัวอย่าง `example.csv`

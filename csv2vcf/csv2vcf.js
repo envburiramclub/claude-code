@@ -204,7 +204,8 @@
   // ---------------------------------------------------------------------------
 
   const PHONE_SPLIT_RE = /:::|[;,/|\n]/;
-  const PHONE_EXT_RE = /\s*(?:ต่อ|extension|ext\.?|x)\s*(?=\d)/giu;
+  // ใช้ \s? ไม่ใช่ \s*: cleanText ยุบช่องว่างเหลือตัวเดียวแล้ว และ \s* ใช้เวลาแบบกำลังสองกับช่องว่างยาว ๆ
+  const PHONE_EXT_RE = /\s?(?:ต่อ|extension|ext\.?|x)\s?(?=\d)/giu;
   const EXCEL_SCI_RE = /^[+-]?\d+(?:\.\d+)?[eE][+-]?\d+$/;
   const PHONE_ALLOWED = new Set("0123456789+-(). *#,");
   const PHONE_PAREN_PLUS_RE = /^\(\s*\+\s*(\d{1,4})\s*\)/;

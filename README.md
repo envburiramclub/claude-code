@@ -17,7 +17,9 @@
 | ไฟล์ | หน้าที่ |
 | --- | --- |
 | `index.html`, `home.css`, `favicon.svg` | หน้าหลักที่รวมลิงก์ทุกระบบ (ไม่มีสคริปต์) |
-| `tests/test_home.py` | ตรวจว่าหน้าหลักลิงก์ครบทุกโฟลเดอร์ ลิงก์ไม่เสีย และตั้งค่าความปลอดภัยครบ |
+| `tests/test_home.py` | ตรวจว่าหน้าหลักลิงก์ครบทุกโฟลเดอร์ ลิงก์ไม่เสีย ตั้งค่าความปลอดภัยครบ และซอร์สไม่มีอักขระล่องหน |
+| `tests/test_redos.py`, `tests/redos_fuzz.js` | วัดเวลา regex ทุกตัวใน repo กับข้อความที่จงใจสร้าง (กัน ReDoS) |
+| `tests/test_vendor.py` | ตรวจว่าไลบรารีใน `vendor/` ตรงกับค่า SHA-256 ใน `SHA256SUMS` |
 | `.github/workflows/static.yml` | เผยแพร่ทั้ง repo ขึ้น GitHub Pages ทุกครั้งที่ push ขึ้น `main` |
 
 **ทุกไฟล์ใน repo เป็นสาธารณะ:** workflow เผยแพร่ทั้ง repo ขึ้นเว็บ ห้าม commit ความลับหรือข้อมูลส่วนบุคคลจริง
@@ -28,7 +30,7 @@
 2. ใส่ทุกไฟล์ของระบบในโฟลเดอร์นั้น มี `index.html` เป็นหน้าแรก ใช้ path แบบ relative
    และมีลิงก์กลับหน้าหลัก `../index.html`
 3. เพิ่มการ์ดใน `index.html` และแถวในตารางด้านบน
-4. รันเทสต์ `python3 -m unittest discover -s tests -v`
+4. รันเทสต์ `python3 -m unittest discover -s tests -v` (บางเทสต์ต้องมี Node.js ถ้าไม่มีจะข้าม)
 
 ## ทดสอบในเครื่อง
 

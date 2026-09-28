@@ -143,8 +143,15 @@
 
   /** ปรับข้อความภาษาไทยให้ถูกต้อง และจัดบรรทัดว่าง */
   function cleanText(text) {
-    return fixThai(String(text || '').replace(/\r\n?/g, '\n'))
-      .replace(/[ \t]+$/gm, '')
+    // ตัดช่องว่างท้ายบรรทัดโดยไล่จากท้ายแต่ละบรรทัด (/[ \t]+$/gm ช้าแบบกำลังสองกับช่องว่างยาว ๆ กลางบรรทัด)
+    // แยกบรรทัดด้วยตัวขึ้นบรรทัดชุดเดียวกับ $ ของ regex แบบ m (\r ถูกแปลงเป็น \n ไปแล้ว)
+    var parts = fixThai(String(text || '').replace(/\r\n?/g, '\n')).split(/(\n|\u2028|\u2029)/);
+    for (var i = 0; i < parts.length; i += 2) {
+      var line = parts[i], end = line.length;
+      while (end > 0 && (line.charAt(end - 1) === ' ' || line.charAt(end - 1) === '\t')) end--;
+      parts[i] = line.slice(0, end);
+    }
+    return parts.join('')
       .replace(/\n{3,}/g, '\n\n')
       .trim();
   }

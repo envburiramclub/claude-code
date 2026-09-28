@@ -203,7 +203,7 @@
 
   function baseName(name) {
     var n = String(name || '').replace(/\.pdf$/i, '');
-    var safe = window.PdfExport ? PdfExport.sanitizeFilename(n).replace(/\.pdf$/i, '') : n.replace(/[^\w฀-๿ .-]+/g, '_');
+    var safe = window.PdfExport ? PdfExport.sanitizeFilename(n).replace(/\.pdf$/i, '') : n.replace(/[^\w\u0e00-\u0e7f .-]+/g, '_');
     return safe || 'document';
   }
 
@@ -388,7 +388,7 @@
   //  ข้อความ → ย่อหน้า
   // ---------------------------------------------------------------------
 
-  var BAD_CHARS = /[�-\u0000-\u0008\u000E-\u001F]/g;
+  var BAD_CHARS = /[�\ue000-\uf8ff\u0000-\u0008\u000E-\u001F]/g;
   var LETTER = /[\p{L}\p{N}]/gu;
 
   /** ค่าที่ตำแหน่ง q (0..1) ของข้อมูลที่เรียงแล้ว (q = 0.5 คือค่ากลาง) */
@@ -400,6 +400,16 @@
   function median(arr) { return quantile(arr, 0.5); }
 
   /**
+   * ตัดอักขระใน chars ออกจากท้ายข้อความ โดยไล่จากท้ายสตริง — ข้อความมาจากไฟล์ PDF (ไม่น่าเชื่อถือ)
+   * ห้ามใช้ regex แบบ /[ \t]+$/ ซึ่งใช้เวลาแบบกำลังสองกับช่องว่างยาว ๆ กลางข้อความ (หน้าเว็บค้างได้)
+   */
+  function trimEndOf(s, chars) {
+    var end = s.length;
+    while (end > 0 && chars.indexOf(s.charAt(end - 1)) >= 0) end--;
+    return end === s.length ? s : s.slice(0, end);
+  }
+
+  /**
    * รายการข้อความของ PDF.js → บรรทัด (ตามลำดับในไฟล์)
    * PDF.js ใส่ช่องว่างระหว่างคำและแจ้งการขึ้นบรรทัด (hasEOL) ให้แล้ว — ที่นี่ต่อข้อความในบรรทัดเดียวกันตามลำดับเดิม
    * (สระ/วรรณยุกต์ที่ถูกวาดแยกชิ้นจึงต่อกับพยัญชนะถูกตัว ไม่มีช่องว่างแทรก), เปลี่ยนช่องว่างยาว (คอลัมน์/ตาราง) เป็นแท็บ,
@@ -409,7 +419,7 @@
     var lines = [], cur = null;
     function close() {
       if (cur) {
-        cur.text = cur.text.replace(/[ \t]+$/, '');
+        cur.text = trimEndOf(cur.text, ' \t');
         if (cur.text) lines.push(cur);
       }
       cur = null;
@@ -435,7 +445,7 @@
           cur = { text: '', ux: ux, uy: uy, across: across, size: size, end: along };
         }
         var gap = along - cur.end;
-        if (cur.text && gap > 1.5 * Math.max(size, cur.size)) cur.text = cur.text.replace(/ +$/, '') + '\t';
+        if (cur.text && gap > 1.5 * Math.max(size, cur.size)) cur.text = trimEndOf(cur.text, ' ') + '\t';
         cur.text += str;
         cur.size = Math.max(cur.size, size);
         cur.end = Math.max(cur.end, along + w);
@@ -496,7 +506,7 @@
       var mid = its.slice(first, last + 1), head = mid[0];
       var text = a.text;
       if (first > 0) text = text.replace(/^\s+/, '');
-      if (last < its.length - 1) text = text.replace(/\s+$/, '');
+      if (last < its.length - 1) text = text.trimEnd(); // เท่ากับ /\s+$/ แต่ไม่ช้าแบบกำลังสอง
       out.push.apply(out, its.slice(0, first));
       out.push({
         str: text,
@@ -602,7 +612,7 @@
     var norm = window.ThaiText.normalize(String(text || '').replace(/\r\n?/g, '\n'));
     return norm.split(/\n[ \t]*\n+/).map(function (block) {
       // OCR เว้นช่องว่างยาวแทนคอลัมน์ของตาราง → แท็บ
-      return block.split('\n').map(function (l) { return l.replace(/[ \t]+$/, '').replace(/ {3,}/g, '\t'); }).filter(Boolean);
+      return block.split('\n').map(function (l) { return trimEndOf(l, ' \t').replace(/ {3,}/g, '\t'); }).filter(Boolean);
     }).filter(function (lines) { return lines.length; }).map(function (lines) { return { lines: lines, size: 0 }; });
   }
 
