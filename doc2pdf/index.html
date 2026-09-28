@@ -3,19 +3,16 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-eval' 'wasm-unsafe-eval'; style-src 'self' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' blob: data:; media-src 'self' blob: mediastream:; connect-src 'self' data: blob:; worker-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-eval' 'wasm-unsafe-eval'; style-src 'self'; font-src 'self'; img-src 'self' blob: data:; media-src 'self' blob: mediastream:; connect-src 'self' data: blob:; worker-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
   <meta name="referrer" content="no-referrer">
   <meta name="theme-color" content="#1f5eff">
   <meta name="description" content="แปลงรูปภาพเอกสารหรือภาพถ่ายจากกล้องเป็นไฟล์ PDF พร้อมครอปอัตโนมัติ ลบเงา และปรับภาพให้คมชัด ทำงานในเบราว์เซอร์ทั้งหมด">
   <title>สแกนเอกสารเป็น PDF</title>
 
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Sans+Thai:wght@400;500;600;700&display=swap">
   <meta name="app-build" content="__APP_BUILD__">
 
   <!-- โหลด CSS/JS ทั้งหมดผ่าน boot.js พร้อม ?v=<เลข commit>-<วันเวลาที่เปิด> เพื่อให้ได้ไฟล์ล่าสุดเสมอ
-       (ไลบรารีทั้งหมดอยู่ในเว็บไซต์นี้ใน vendor/ ไม่พึ่ง CDN ภายนอก) -->
+       (ไลบรารีทั้งหมดอยู่ในเว็บไซต์นี้ใน vendor/ ไม่พึ่ง CDN ภายนอก และใช้ฟอนต์ในเครื่อง ไม่โหลดฟอนต์จากเว็บอื่น) -->
   <script src="js/boot.js?v=__APP_BUILD__"></script>
 </head>
 <body>

@@ -19,7 +19,8 @@
   --radius-sm: 10px;
   --gutter: 16px;
   --topbar-h: 56px;
-  --font: "Noto Sans Thai", system-ui, -apple-system, "Segoe UI", Tahoma, sans-serif;
+  /* ฟอนต์ที่มีในเครื่อง ไม่โหลดจาก Google Fonts (ไม่ส่ง IP ของผู้ใช้ไปเว็บอื่น): Android/Linux, Windows, iPhone/Mac */
+  --font: "Noto Sans Thai", "Leelawadee UI", "Thonburi", "Sarabun", system-ui, -apple-system, "Segoe UI", Tahoma, sans-serif;
   color-scheme: light;
 }
 @media (prefers-color-scheme: dark) {
