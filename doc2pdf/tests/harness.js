@@ -57,6 +57,7 @@ const API = {
   docx: async (opts) => blobToBase64(await ctx.Docx.create(opts)),
   // ค่าตั้งค่าจากตาราง PRESETS/FONTS (ชื่อที่ไม่มีจริง เช่น constructor ต้องได้ค่าเริ่มต้น)
   pick: (table, key) => ctx.PdfTools._pick(ctx.PdfTools[table], key, table === "PRESETS" ? "standard" : "sarabun"),
+  pageLayout: (w, h, opts) => ctx.PdfExport.pageLayout(w, h, opts),
   heic: heicScenario,
 };
 

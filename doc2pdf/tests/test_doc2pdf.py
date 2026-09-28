@@ -213,6 +213,15 @@ class Doc2pdfTest(unittest.TestCase):
                 self.assertEqual(self.call("pick", "PRESETS", key)[0]["dpi"], 150)
                 self.assertEqual(self.call("pick", "FONTS", key)[0]["name"], "TH Sarabun New")
 
+    def test_page_layout_with_unknown_page_size(self):
+        a4, _ = self.call("pageLayout", 1000, 1414, {"pageSize": "a4", "margin": 10})
+        self.assertEqual((round(a4["pw"]), round(a4["ph"])), (210, 297))
+        fit, _ = self.call("pageLayout", 1000, 1414, {"pageSize": "fit"})
+        for key in ("constructor", "__proto__", "toString", "nope"):
+            with self.subTest(pageSize=key):
+                # ขนาดที่ไม่มีในตาราง = ตามขนาดภาพ (เดิม "constructor" ได้ NaN ทั้งหน้า)
+                self.assertEqual(self.call("pageLayout", 1000, 1414, {"pageSize": key})[0], fit)
+
     def test_xml_escape(self):
         self.assertEqual(self.call("xml", '<&>"\x00\x0b\ud800x')[0], "&lt;&amp;&gt;&quot;x")
 

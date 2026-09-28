@@ -28,6 +28,9 @@
 
   function pad2(n) { return (n < 10 ? '0' : '') + n; }
 
+  /** ค่าในตารางเฉพาะชื่อที่มีจริง (ชื่ออย่าง "constructor" ไม่นับ) */
+  function own(table, key) { return typeof key === 'string' && Object.prototype.hasOwnProperty.call(table, key); }
+
   function defaultName() {
     var d = new Date();
     return 'scan-' + d.getFullYear() + pad2(d.getMonth() + 1) + pad2(d.getDate()) +
@@ -73,7 +76,7 @@
   function pageLayout(imgW, imgH, opts) {
     var margin = Math.max(0, Number(opts.margin) || 0);
     var pw, ph;
-    if (opts.pageSize === 'fit' || !PAGE_SIZES[opts.pageSize]) {
+    if (opts.pageSize === 'fit' || !own(PAGE_SIZES, opts.pageSize)) {
       // หน้ากระดาษขนาดเท่าสัดส่วนภาพ โดยด้านยาวเท่ากับ A4 (297 มม.)
       var k = 297 / Math.max(imgW, imgH);
       pw = imgW * k + margin * 2;
@@ -197,7 +200,7 @@
   async function build(pages, opts, renderPage, onProgress) {
     if (!pages.length) throw new Error('ยังไม่มีหน้าเอกสาร');
     await ensureJsPdf();
-    var q = QUALITY[opts.quality] || QUALITY.high;
+    var q = own(QUALITY, opts.quality) ? QUALITY[opts.quality] : QUALITY.high;
     var n = pages.length;
     var ahead = Math.max(1, Math.min(4, opts.concurrency || 1));
     var isCancelled = typeof opts.isCancelled === 'function' ? opts.isCancelled : function () { return false; };
