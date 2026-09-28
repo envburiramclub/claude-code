@@ -18,6 +18,11 @@
   const result = $("result");
   const download = $("download");
 
+  // Android: หน้าเลือกไฟล์ของระบบกรองได้เฉพาะ MIME type — accept ที่มีนามสกุล (.csv, .txt) ทำให้หน้าเลือกไฟล์
+  // ของ Firefox บน Android ค้างแล้วปิดตัว และไฟล์ CSV บน Android ถูกระบุ MIME ได้หลายแบบ (text/comma-separated-values,
+  // application/octet-stream) จนบางไฟล์เลือกไม่ได้ จึงไม่กรองชนิดไฟล์ — ตรวจไฟล์เองหลังเลือกอยู่แล้ว
+  if (/Android/i.test(navigator.userAgent)) input.removeAttribute("accept");
+
   let file = null;
   let downloadUrl = null;
 

@@ -362,6 +362,19 @@ class StaticFilesTest(unittest.TestCase):
         with open(os.path.join(SITE, "style.css"), "rb") as a, open(os.path.join(WEB, "style.css"), "rb") as b:
             self.assertEqual(a.read(), b.read())
 
+    def test_android_file_picker_gets_no_extension_filter(self):
+        # หน้าเลือกไฟล์ของ Android กรองได้เฉพาะ MIME type: accept ".csv,.txt" ทำให้หน้าเลือกไฟล์ของ Firefox
+        # บน Android ค้างแล้วปิดตัว ทั้งสองหน้าต้องเอา accept ออกบน Android ก่อนผูก event ใด ๆ
+        for name in ("app.js", os.path.join("web", "app.js")):
+            with self.subTest(file=name):
+                code = self.read(name)
+                fix = code.index('if (/Android/i.test(navigator.userAgent)) input.removeAttribute("accept");')
+                self.assertLess(fix, code.index("addEventListener"))
+        for name in ("index.html", os.path.join("web", "index.html")):
+            with self.subTest(file=name):
+                # บนคอมพิวเตอร์ยังกรองด้วยนามสกุล (Windows/Mac รู้จักนามสกุลดีกว่า MIME type)
+                self.assertIn('accept=".csv,.txt,text/csv"', self.read(name))
+
     def test_server_page_refuses_to_run_without_webapp(self):
         # web/index.html ถูกเผยแพร่บน GitHub Pages ด้วย (ที่ csv2vcf/web/) แต่ที่นั่นไม่มี /api/convert
         # หน้านั้นต้องไม่ส่งไฟล์ไปไหน และพาไปใช้เวอร์ชันที่แปลงในเบราว์เซอร์แทน

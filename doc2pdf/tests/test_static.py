@@ -68,6 +68,23 @@ class NoThirdPartyTest(unittest.TestCase):
                 self.assertNotIn("@import", css)
                 self.assertIsNone(re.search(r"url\(\s*['\"]?\s*(?:[a-z][a-z0-9+.-]*:|//)", css, re.I))
 
+    def test_android_file_pickers_get_mime_types_only(self):
+        # หน้าเลือกไฟล์ของ Android กรองได้เฉพาะ MIME type (type/subtype) — นามสกุลอย่าง .pdf ทำให้หน้าเลือกไฟล์
+        # ของ Firefox บน Android ค้างแล้วปิดตัว ทุกช่องเลือกไฟล์ที่มีนามสกุลใน accept ต้องถูกเปลี่ยนบน Android
+        code = "\n".join(read("js", name) for name in sorted(os.listdir(os.path.join(ROOT, "js"))))
+        overrides = dict(re.findall(r"\$\('(\w+)'\)\.setAttribute\('accept', '([^']*)'\)", code))
+        for tag, attrs in self.tags:
+            if tag == "input" and attrs.get("type") == "file":
+                tokens = [t.strip() for t in (attrs.get("accept") or "").split(",") if t.strip()]
+                with self.subTest(input=attrs.get("id")):
+                    if any(not re.fullmatch(r"[a-z]+/(?:\*|[a-z0-9.+-]+)", t) for t in tokens):
+                        self.assertIn(attrs.get("id"), overrides, "ต้องเปลี่ยน accept เป็น MIME type บน Android")
+        self.assertEqual(overrides, {"fileInput": "image/*", "pdfInput": "application/pdf"})
+        for name, value in overrides.items():
+            for token in value.split(","):
+                self.assertRegex(token.strip(), r"^[a-z]+/(?:\*|[a-z0-9.+-]+)$", name)
+        self.assertEqual(code.count("/Android/i.test(navigator.userAgent || '')) $("), 2)
+
     def test_scripts_contain_no_external_urls(self):
         folder = os.path.join(ROOT, "js")
         for name in sorted(os.listdir(folder)):

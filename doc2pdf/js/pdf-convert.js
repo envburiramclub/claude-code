@@ -343,6 +343,9 @@
       var lang = localStorage.getItem('ocrLang');
       if (OCR_LANGS.indexOf(lang) >= 0) $('pdfLang').value = lang;
     } catch (_) { /* ignore */ }
+    // Android: หน้าเลือกไฟล์ของระบบกรองได้เฉพาะ MIME type — นามสกุล .pdf ใน accept ทำให้หน้าเลือกไฟล์
+    // ของ Firefox บน Android ค้างแล้วปิดตัว
+    if (/Android/i.test(navigator.userAgent || '')) $('pdfInput').setAttribute('accept', 'application/pdf');
     $('btnPdfTools').addEventListener('click', pick);
     $('pdfPick').addEventListener('click', pick);
     $('pdfInput').addEventListener('change', function (e) {
