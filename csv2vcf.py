@@ -684,22 +684,31 @@ def decode_csv_bytes(data: bytes, encoding: str = "auto") -> Tuple[str, str]:
             "ไฟล์นี้เป็นไฟล์ Excel (.xlsx/.xls) หรือไฟล์บีบอัด ไม่ใช่ CSV "
             'ให้เปิดใน Excel แล้วบันทึกเป็น "CSV UTF-8" ก่อน'
         )
+    attempt = encoding
     try:
         if encoding != "auto":
             return data.decode(encoding), encoding
         if data.startswith(codecs.BOM_UTF8):
-            return data.decode("utf-8-sig"), "utf-8-sig"
+            attempt = "utf-8-sig"
+            return data.decode(attempt), attempt
         if data.startswith((codecs.BOM_UTF16_LE, codecs.BOM_UTF16_BE)):
-            return data.decode("utf-16"), "utf-16"
+            attempt = "utf-16"
+            return data.decode(attempt), attempt
         try:
-            return data.decode("utf-8"), "utf-8"
+            attempt = "utf-8"
+            return data.decode(attempt), attempt
         except UnicodeDecodeError:
-            return data.decode("cp874"), "cp874"
+            attempt = "cp874"
+            return data.decode(attempt), attempt
     except LookupError as exc:
         raise ConversionError(f"ไม่รู้จัก encoding {show(encoding)}") from exc
     except UnicodeDecodeError as exc:
+        # แจ้งชื่อ encoding ที่ลองจริง (exc.encoding ของ cp874/tis-620/cp1252 คือ "charmap"
+        # ซึ่งผู้ใช้ไม่รู้จัก) และ utf-8-sig นับตำแหน่งหลัง BOM (ถ้ามี) จึงบวกกลับให้เป็นตำแหน่งจริงในไฟล์
+        skipped_bom = codecs.lookup(attempt).name == "utf-8-sig" and data.startswith(codecs.BOM_UTF8)
+        start = exc.start + (len(codecs.BOM_UTF8) if skipped_bom else 0)
         raise ConversionError(
-            f"ถอดรหัสไฟล์ด้วย {exc.encoding} ไม่ได้ (ตำแหน่งไบต์ {exc.start}) "
+            f"ถอดรหัสไฟล์ด้วย {attempt} ไม่ได้ (ตำแหน่งไบต์ {start}) "
             "ลองระบุ --encoding เช่น utf-8, cp874, tis-620, utf-16"
         ) from exc
 

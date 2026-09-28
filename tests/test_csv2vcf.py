@@ -462,6 +462,23 @@ class InputHandlingTest(unittest.TestCase):
         with self.assertRaises(csv2vcf.ConversionError):
             csv2vcf.decode_csv_bytes(b"\xff\xfe\xfd", "utf-8")
 
+    def test_decode_errors_name_the_real_encoding_and_position(self):
+        cases = {
+            (b"a\xff\xdb", "auto"): "cp874 ไม่ได้ (ตำแหน่งไบต์ 1)",
+            (b"a\xdb", "tis-620"): "tis-620 ไม่ได้ (ตำแหน่งไบต์ 1)",
+            (b"a\x81", "cp1252"): "cp1252 ไม่ได้ (ตำแหน่งไบต์ 1)",
+            (b"\xef\xbb\xbfab\xff", "auto"): "utf-8-sig ไม่ได้ (ตำแหน่งไบต์ 5)",
+            (b"\xef\xbb\xbfab\xff", "utf-8-sig"): "utf-8-sig ไม่ได้ (ตำแหน่งไบต์ 5)",
+            (b"ab\xff", "utf-8-sig"): "utf-8-sig ไม่ได้ (ตำแหน่งไบต์ 2)",  # ไม่มี BOM ไม่ต้องบวก
+            (b"ab\xff", "utf-8"): "utf-8 ไม่ได้ (ตำแหน่งไบต์ 2)",
+            (b"\xff\xfea\x00b", "auto"): "utf-16 ไม่ได้ (ตำแหน่งไบต์ 4)",
+        }
+        for (data, encoding), expected in cases.items():
+            with self.assertRaises(csv2vcf.ConversionError) as ctx:
+                csv2vcf.decode_csv_bytes(data, encoding)
+            self.assertIn(expected, str(ctx.exception), (data, encoding))
+            self.assertNotIn("charmap", str(ctx.exception))
+
     def test_bom_in_header_with_explicit_encoding(self):
         text, _ = csv2vcf.decode_csv_bytes(b"\xef\xbb\xbfName,Phone\nA,0811111111\n", "utf-8")
         vcf, _ = convert(text)

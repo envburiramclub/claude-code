@@ -5,3 +5,4 @@ __pycache__/
 *.vcf
 *.csv
 !examples/*.csv
+!docs/example.csv

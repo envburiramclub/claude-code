@@ -1,12 +1,44 @@
 # csv2vcf — แปลงรายชื่อผู้ติดต่อจากไฟล์ CSV เป็นไฟล์ vCard (.vcf)
 
 แปลงไฟล์รายชื่อ `.csv` เป็นไฟล์ `.vcf` (vCard 3.0) เพื่อนำเข้าโทรศัพท์ Android, iPhone,
-Google Contacts หรือ Outlook ใช้ได้ทั้งแบบ **เว็บไซต์** และแบบ **คำสั่งในเทอร์มินัล**
-เขียนด้วย Python ใช้แค่ไลบรารีมาตรฐานที่มากับ Python จึงไม่ต้องติดตั้งอะไรเพิ่ม
+Google Contacts หรือ Outlook ใช้ได้ 3 แบบ:
 
-ต้องใช้ Python รุ่น 3.8 ขึ้นไป
+1. **เว็บไซต์บน GitHub Pages** เปิดใช้ได้ทันทีโดยไม่ต้องติดตั้งอะไร แปลงในเบราว์เซอร์ทั้งหมด
+2. **เว็บไซต์ที่รันเอง** (`webapp.py`)
+3. **คำสั่งในเทอร์มินัล** (`csv2vcf.py`)
 
-## ใช้งานผ่านเว็บไซต์
+แบบที่ 2 และ 3 เขียนด้วย Python ใช้แค่ไลบรารีมาตรฐาน ต้องใช้ Python รุ่น 3.8 ขึ้นไป
+
+## ใช้งานผ่าน GitHub Pages
+
+เปิด <https://envburiramclub.github.io/claude-code/docs/> แล้วเลือกไฟล์ CSV กด **แปลงไฟล์** และ **ดาวน์โหลดไฟล์ .vcf**
+
+- **ไฟล์ไม่ถูกส่งขึ้นอินเทอร์เน็ต:** แปลงด้วย JavaScript ในเบราว์เซอร์ทั้งหมด
+  หน้าเว็บตั้ง Content-Security-Policy ห้ามเชื่อมต่อเครือข่าย (`connect-src 'none'`)
+  จึงส่งข้อมูลออกไปที่ไหนไม่ได้แม้แต่เซิร์ฟเวอร์ของ GitHub
+- **หน้าเว็บไม่ค้าง:** แปลงใน Web Worker รองรับไฟล์ถึง 50 MB
+- **เปิดจากเครื่องได้:** ดับเบิลคลิก `docs/index.html` ได้โดยไม่ต้องมีอินเทอร์เน็ต
+
+**การเผยแพร่:** GitHub Actions (`.github/workflows/static.yml`) เผยแพร่ทั้ง repo ขึ้น GitHub Pages
+ทุกครั้งที่ push ขึ้น `main` (Settings → Pages → Source: **GitHub Actions**) เว็บนี้อยู่ในโฟลเดอร์ `docs/`
+จึงเปิดได้ที่ `/claude-code/docs/` ดูสถานะการเผยแพร่ได้ที่แท็บ **Actions** ของ repo
+
+**ทดสอบในเครื่องแบบเดียวกับ GitHub Pages:** `python3 -m http.server --directory docs 8000`
+แล้วเปิด <http://127.0.0.1:8000>
+
+**โครงสร้างโฟลเดอร์ `docs/`:**
+
+| ไฟล์ | หน้าที่ |
+| --- | --- |
+| `index.html`, `style.css`, `app.js` | หน้าเว็บ |
+| `worker.js` | แปลงไฟล์ใน Web Worker |
+| `csv2vcf.js` | ตัวแปลงที่ port มาจาก `csv2vcf.py` ให้ได้ผลเหมือนกันทุกไบต์ |
+| `csv2vcf-data.js` | ตารางข้อมูลที่สร้างจาก Python ด้วย `python3 tools/build_js_data.py` ห้ามแก้ด้วยมือ |
+
+`tests/test_static_site.py` รันไฟล์ชุดเดียวกันผ่านทั้ง Python และ JavaScript แล้วเทียบผลทุกไบต์
+(ต้องมี Node.js ถ้าไม่มีจะข้ามเทสต์นี้)
+
+## ใช้งานผ่านเว็บไซต์ที่รันเอง
 
 ```bash
 python3 webapp.py
