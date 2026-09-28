@@ -1,11 +1,11 @@
 #!/usr/bin/env python3
 """csv2vcf - แปลงไฟล์รายชื่อผู้ติดต่อ .csv เป็นไฟล์ vCard (.vcf)
 
-Converts a contacts CSV (Google Contacts export, Outlook export, or a
-hand-made sheet with English or Thai column names) into a vCard 3.0 file
-that Android, iOS, Google Contacts and Outlook can import.
+แปลงไฟล์ CSV รายชื่อผู้ติดต่อ (ไฟล์ export จาก Google Contacts, Outlook หรือไฟล์ที่ทำเอง
+โดยใช้ชื่อคอลัมน์ภาษาอังกฤษหรือภาษาไทย) เป็นไฟล์ vCard 3.0 ที่นำเข้า Android, iOS,
+Google Contacts และ Outlook ได้
 
-Only the Python standard library is used.
+ใช้เฉพาะ Python standard library
 
     python3 csv2vcf.py contacts.csv                      # -> contacts.vcf
     python3 csv2vcf.py contacts.csv -o out.vcf --country-code 66
@@ -32,32 +32,32 @@ __version__ = "1.0.0"
 DEFAULT_MAX_MB = 50
 MAX_MAX_MB = 4096
 MAX_WARNINGS_SHOWN = 100
-PATH_SHOW_LIMIT = 1000  # file paths in messages are shown (sanitised) in full
-FOLD_LIMIT = 75  # octets per physical line, excluding CRLF (RFC 2425 5.8.1)
+PATH_SHOW_LIMIT = 1000  # แสดง path ของไฟล์ในข้อความแบบเต็ม (ผ่านการ sanitise แล้ว)
+FOLD_LIMIT = 75  # จำนวนไบต์สูงสุดต่อบรรทัดจริง ไม่นับ CRLF (RFC 2425 5.8.1)
 
 WarnFn = Callable[[int, str], None]
 
 
 class ConversionError(Exception):
-    """A problem that stops the conversion (bad input, unwritable output...)."""
+    """ปัญหาที่ทำให้การแปลงต้องหยุด (ข้อมูลนำเข้าผิด, เขียนไฟล์ผลลัพธ์ไม่ได้ ...)"""
 
 
 # --------------------------------------------------------------------------
-# Text helpers
+# ฟังก์ชันช่วยจัดการข้อความ
 # --------------------------------------------------------------------------
 
 _NEWLINE_RE = re.compile("\r\n|[\r\n\x0b\x0c\x85\u2028\u2029]")
-# C0/C1 control characters (except tab/newline, handled separately), lone
-# surrogates (not encodable as UTF-8), the BOM, and bidi embedding/override/isolate controls. The latter can make a name
-# display differently from what it really contains ("Trojan Source" spoofing).
+# อักขระควบคุม C0/C1 (ยกเว้น tab/ขึ้นบรรทัดใหม่ ซึ่งจัดการแยก), surrogate เดี่ยว
+# (เข้ารหัสเป็น UTF-8 ไม่ได้), BOM และอักขระควบคุมทิศทางข้อความ (bidi embedding/
+# override/isolate) ซึ่งทำให้ชื่อแสดงผลต่างจากเนื้อหาจริงได้ (การปลอมแบบ "Trojan Source")
 _STRIP_RE = re.compile("[\x00-\x08\x0e-\x1f\x7f-\x9f\ud800-\udfff\ufeff\u202a-\u202e\u2066-\u2069]")
 
 
 def clean_text(value: str, multiline: bool = False) -> str:
-    """Normalise a CSV cell: NFC, no control characters, tidy whitespace.
+    """ทำความสะอาดข้อความในเซลล์ CSV: ทำ NFC, ลบอักขระควบคุม, จัดช่องว่างให้เรียบร้อย
 
-    Line breaks survive only when *multiline* is true; otherwise every run of
-    whitespace (including line breaks) collapses to a single space.
+    เก็บการขึ้นบรรทัดใหม่ไว้เฉพาะเมื่อ *multiline* เป็นจริง มิฉะนั้นช่องว่างที่ติดกัน
+    (รวมถึงการขึ้นบรรทัดใหม่) จะถูกยุบเหลือช่องว่างเดียว
     """
     value = unicodedata.normalize("NFC", value)
     value = _STRIP_RE.sub("", _NEWLINE_RE.sub("\n", value))
@@ -67,7 +67,7 @@ def clean_text(value: str, multiline: bool = False) -> str:
 
 
 def escape_text(value: str) -> str:
-    """Escape a TEXT value (RFC 2426 section 4, RFC 6350 section 3.4)."""
+    """escape ค่าชนิด TEXT (RFC 2426 หัวข้อ 4, RFC 6350 หัวข้อ 3.4)"""
     value = value.replace("\\", "\\\\").replace(";", "\\;").replace(",", "\\,")
     return _NEWLINE_RE.sub(lambda _m: "\\n", value)
 
@@ -76,11 +76,11 @@ _FOLD_TOKEN_RE = re.compile(r"\\.|.", re.DOTALL)
 
 
 def fold_line(line: str, limit: int = FOLD_LIMIT) -> str:
-    """Fold a content line so that no physical line exceeds *limit* octets.
+    """ตัดบรรทัด (fold) ไม่ให้บรรทัดจริงบรรทัดใดยาวเกิน *limit* ไบต์
 
-    Breaks only between whole characters and never inside a backslash escape,
-    so multi-byte UTF-8 sequences (e.g. Thai) stay intact - several importers
-    cannot rejoin a character that was split across lines.
+    ตัดเฉพาะระหว่างอักขระที่สมบูรณ์ และไม่ตัดกลาง escape ที่ขึ้นต้นด้วย backslash
+    ลำดับไบต์ UTF-8 หลายไบต์ (เช่น ภาษาไทย) จึงไม่ขาด เพราะโปรแกรมนำเข้าหลายตัว
+    ต่ออักขระที่ถูกตัดข้ามบรรทัดกลับคืนไม่ได้
     """
     if len(line.encode("utf-8")) <= limit:
         return line
@@ -93,7 +93,7 @@ def fold_line(line: str, limit: int = FOLD_LIMIT) -> str:
         if current and size + n > room:
             pieces.append("".join(current))
             current, size = [], 0
-            room = limit - 1  # continuation lines start with one space
+            room = limit - 1  # บรรทัดต่อเนื่องขึ้นต้นด้วยช่องว่างหนึ่งตัว
         current.append(token)
         size += n
     pieces.append("".join(current))
@@ -101,10 +101,10 @@ def fold_line(line: str, limit: int = FOLD_LIMIT) -> str:
 
 
 def show(value: str, limit: int = 60) -> str:
-    """Quote an untrusted value for a terminal message.
+    """ใส่เครื่องหมายคำพูดให้ค่าที่ไม่น่าเชื่อถือ เพื่อแสดงในข้อความบน terminal
 
-    Control and format characters (ANSI escape sequences, bidi overrides...)
-    are shown as escapes so a crafted CSV cannot manipulate the terminal.
+    อักขระควบคุมและอักขระจัดรูปแบบ (ANSI escape sequence, bidi override ...)
+    จะแสดงเป็น escape ไฟล์ CSV ที่จงใจสร้างจึงสั่งการ terminal ไม่ได้
     """
     if len(value) > limit:
         value = value[:limit] + "..."
@@ -118,7 +118,7 @@ def show(value: str, limit: int = 60) -> str:
 
 
 def _ascii_digits(value: str) -> str:
-    """NFKC-normalise and turn any decimal digit (Thai ๐-๙, full-width...) into ASCII."""
+    """ทำ NFKC แล้วแปลงตัวเลขทุกแบบ (เลขไทย ๐-๙, ตัวเลขเต็มความกว้าง ...) เป็นเลข ASCII"""
     value = unicodedata.normalize("NFKC", value)
     return "".join(
         str(unicodedata.digit(ch)) if unicodedata.category(ch) == "Nd" else ch for ch in value
@@ -126,7 +126,7 @@ def _ascii_digits(value: str) -> str:
 
 
 # --------------------------------------------------------------------------
-# Field normalisation
+# ปรับรูปแบบข้อมูลแต่ละช่อง
 # --------------------------------------------------------------------------
 
 _PHONE_SPLIT_RE = re.compile(r":::|[;,/|\n]")
@@ -139,7 +139,7 @@ _MAX_PHONE_LEN = 40
 def normalize_phone(
     raw: str, country_code: Optional[str] = None
 ) -> Tuple[Optional[str], Optional[str]]:
-    """Return ``(phone, warning)``; *phone* is None when the value is unusable."""
+    """คืนค่า ``(phone, warning)`` โดย *phone* เป็น None เมื่อใช้ค่านั้นไม่ได้"""
     value = clean_text(_ascii_digits(raw))
     if not value:
         return None, None
@@ -148,11 +148,11 @@ def normalize_phone(
             f"เบอร์โทร {show(raw)} ถูก Excel แปลงเป็นเลขวิทยาศาสตร์ "
             "(ให้ตั้งคอลัมน์เป็น Text แล้ว export ใหม่)"
         )
-    value = _PHONE_EXT_RE.sub(",", value)  # "ต่อ 12" / "ext 12" -> dial pause
+    value = _PHONE_EXT_RE.sub(",", value)  # "ต่อ 12" / "ext 12" -> หยุดรอ (pause) แล้วกดเบอร์ต่อ
     kept = [ch for ch in value if ch in _PHONE_ALLOWED]
     dropped = len(kept) != len(value)
     phone = " ".join("".join(kept).split())
-    # "+" is only meaningful as the very first character.
+    # "+" มีความหมายเฉพาะเมื่อเป็นอักขระตัวแรกเท่านั้น
     phone = phone[:1] + phone[1:].replace("+", "")
     phone = phone.strip(" -.,")
     digits = sum(ch.isdigit() for ch in phone)
@@ -165,17 +165,17 @@ def normalize_phone(
 
 
 _EMAIL_SPLIT_RE = re.compile(r":::|[;,]")
-# Neither side may contain "@": otherwise "<@@@@..." backtracks quadratically.
+# ทั้งสองฝั่งห้ามมี "@" ไม่เช่นนั้น "<@@@@..." จะ backtrack แบบกำลังสอง
 _EMAIL_BRACKET_RE = re.compile(r"<([^<>\s@]+@[^<>\s@]+)>")
-# Deliberately permissive (allows internationalised addresses) but excludes
-# whitespace and every character that is special in vCard or HTML. Domain
-# labels exclude "." so the pattern cannot backtrack catastrophically.
+# ตั้งใจให้ยืดหยุ่น (รองรับอีเมลที่มีอักษรนอกภาษาอังกฤษ) แต่ไม่รับช่องว่างและอักขระ
+# ที่มีความหมายพิเศษใน vCard หรือ HTML ส่วน label ของโดเมนไม่รับ "." pattern นี้
+# จึงไม่มีทาง backtrack แบบระเบิด (catastrophic)
 _EMAIL_RE = re.compile(r'^[^\s@<>()\[\]\\,;:"]+@[^\s@<>()\[\]\\,;:".]+(?:\.[^\s@<>()\[\]\\,;:".]+)+$')
 _MAX_EMAIL_LEN = 254
 
 
 def split_emails(raw: str) -> List[str]:
-    """Split a cell holding one or more addresses ("a@x.com; Name <b@y.com>")."""
+    """แยกเซลล์ที่มีอีเมลหนึ่งหรือหลายที่อยู่ ("a@x.com; Name <b@y.com>")"""
     parts: List[str] = []
     for segment in _EMAIL_SPLIT_RE.split(clean_text(raw)):
         parts.extend(_EMAIL_BRACKET_RE.findall(segment) or segment.split())
@@ -197,7 +197,7 @@ _MAX_URL_LEN = 2048
 
 
 def normalize_url(raw: str) -> Optional[str]:
-    """Return an http(s) URL, or None for anything else (javascript:, file:...)."""
+    """คืนค่า URL แบบ http(s) หรือ None สำหรับอย่างอื่นทั้งหมด (javascript:, file: ...)"""
     value = clean_text(raw)
     if (
         not value
@@ -219,10 +219,10 @@ _DATE_XY_RE = re.compile(r"^(\d{1,2})[/.-](\d{1,2})[/.-](\d{4})(?:\s.*)?$")
 
 
 def normalize_birthday(raw: str, date_order: str = "dmy") -> Optional[str]:
-    """Parse a birthday into ``YYYY-MM-DD``.
+    """แปลงวันเกิดเป็นรูปแบบ ``YYYY-MM-DD``
 
-    Accepts ISO dates and DD/MM/YYYY (or MM/DD/YYYY with ``date_order="mdy"``).
-    Buddhist-era years (> 2400, common in Thailand) are converted to CE.
+    รับวันที่แบบ ISO และ DD/MM/YYYY (หรือ MM/DD/YYYY เมื่อ ``date_order="mdy"``)
+    ปี พ.ศ. (มากกว่า 2400 ซึ่งใช้กันทั่วไปในไทย) จะแปลงเป็น ค.ศ.
     """
     value = clean_text(_ascii_digits(raw))
     match = _DATE_YMD_RE.match(value) or _DATE_COMPACT_RE.match(value)
@@ -243,7 +243,7 @@ def normalize_birthday(raw: str, date_order: str = "dmy") -> Optional[str]:
 
 
 # --------------------------------------------------------------------------
-# Column recognition
+# จดจำชื่อคอลัมน์
 # --------------------------------------------------------------------------
 
 
@@ -256,7 +256,7 @@ def normalize_header(name: str) -> str:
 
 @dataclass(frozen=True)
 class Column:
-    kind: str  # name | org | tel | email | url | adr | bday | note
+    kind: str  # ชนิดข้อมูล: name | org | tel | email | url | adr | bday | note
     attr: str = "value"
     group: Tuple = ()
     types: Tuple[str, ...] = ()
@@ -320,13 +320,13 @@ _SIMPLE_COLUMNS: Dict[str, Tuple[str, str, Tuple[str, ...]]] = {
     for alias in aliases
 }
 
-# "Home Phone", "Business Fax", "Other E-mail", "Home Street" (Outlook style).
+# "Home Phone", "Business Fax", "Other E-mail", "Home Street" (แบบ Outlook)
 _TYPE_PREFIXES: Dict[str, Tuple[str, ...]] = {
     "home": ("HOME",), "personal": ("HOME",), "business": ("WORK",), "work": ("WORK",),
     "office": ("WORK",), "other": (),
 }
 
-# Google Contacts: "Phone 1 - Type", "E-mail 2 - Value", "Address 1 - City"...
+# แบบ Google Contacts: "Phone 1 - Type", "E-mail 2 - Value", "Address 1 - City" ...
 _GOOGLE_RE = re.compile(r"^(phone|email|address|website|organization) ?(\d+) ?- ?(.+)$")
 _GOOGLE_KIND = {"phone": "tel", "email": "email", "address": "adr", "website": "url", "organization": "org"}
 _GOOGLE_ATTRS: Dict[str, Dict[str, str]] = {
@@ -348,16 +348,16 @@ def _strip_numbers(name: str) -> str:
 
 def _make_column(kind: str, attr: str, types: Tuple[str, ...], index: int) -> Column:
     if kind in ("tel", "email", "url"):
-        group: Tuple = (kind, "column", index)  # every column is its own entry
+        group: Tuple = (kind, "column", index)  # แต่ละคอลัมน์เป็นหนึ่งรายการแยกกัน
     elif kind == "adr":
-        group = ("adr",) + types  # "Home Street" + "Home City" form one address
+        group = ("adr",) + types  # "Home Street" + "Home City" รวมเป็นที่อยู่เดียวกัน
     else:
         group = ()
     return Column(kind, attr, group, types)
 
 
 def classify_header(header: str, index: int) -> Optional[Column]:
-    """Map a CSV header to the contact field it holds, or None if unknown."""
+    """จับคู่หัวคอลัมน์ CSV กับช่องข้อมูลผู้ติดต่อ หรือคืน None ถ้าไม่รู้จัก"""
     name = normalize_header(header)
     if not name:
         return None
@@ -393,20 +393,19 @@ _LABEL_TYPES: List[Tuple[str, Tuple[str, ...], Tuple[str, ...]]] = [
 
 
 def types_from_label(label: str, kind: str) -> Tuple[str, ...]:
-    """Translate a free-form label ("* Mobile", "Work Fax") into allowlisted TYPEs.
+    """แปลง label ที่เขียนอิสระ ("* Mobile", "Work Fax") เป็นค่า TYPE ที่อยู่ใน allowlist
 
-    The label itself is never copied into the output, so it cannot inject
-    parameters or properties.
+    ไม่คัดลอกตัว label ลงในผลลัพธ์เลย จึงใช้แทรก parameter หรือ property ไม่ได้
     """
     text = clean_text(label).lower()
     types = [t for t, words, kinds in _LABEL_TYPES if kind in kinds and any(w in text for w in words)]
-    if text.startswith("*"):  # Google marks the primary value with "* "
+    if text.startswith("*"):  # Google ทำเครื่องหมายค่าหลักด้วย "* "
         types.append("PREF")
     return tuple(types)
 
 
 # --------------------------------------------------------------------------
-# Contacts
+# ข้อมูลผู้ติดต่อ
 # --------------------------------------------------------------------------
 
 
@@ -460,8 +459,8 @@ class Contact:
 
 @dataclass
 class Options:
-    country_code: Optional[str] = None  # e.g. "66": 081... -> +66 81...
-    date_order: str = "dmy"  # how to read 01/02/2000: "dmy" or "mdy"
+    country_code: Optional[str] = None  # เช่น "66": 081... -> +66 81...
+    date_order: str = "dmy"  # วิธีอ่าน 01/02/2000: "dmy" หรือ "mdy"
 
 
 def _dedupe(types: Iterable[str]) -> Tuple[str, ...]:
@@ -471,7 +470,7 @@ def _dedupe(types: Iterable[str]) -> Tuple[str, ...]:
 def build_contact(
     row: Sequence[str], columns: Sequence[Tuple[int, Column]], options: Options, warn: WarnFn, line: int
 ) -> Optional[Contact]:
-    """Turn one CSV row into a Contact, or None if it holds nothing usable."""
+    """แปลง CSV หนึ่งแถวเป็น Contact หรือคืน None ถ้าไม่มีข้อมูลที่ใช้ได้"""
     contact = Contact()
     groups: Dict[Tuple, Tuple[Column, Dict[str, List[str]]]] = {}
 
@@ -549,8 +548,8 @@ def _build_address(fields: Dict[str, List[str]], types: Tuple[str, ...]) -> Opti
         values = (clean_text(v, multiline) for v in fields.get(name, []))
         return ", ".join(v for v in values if v)
 
-    # A hand-made "Address"/"ที่อยู่" column is the street part when there is no
-    # street column, even next to city/province columns.
+    # คอลัมน์ "Address"/"ที่อยู่" ที่ทำเอง ถือเป็นส่วนถนน (street) เมื่อไม่มีคอลัมน์ street
+    # แม้จะมีคอลัมน์เมือง/จังหวัดอยู่ด้วยก็ตาม
     street = part("street", multiline=True) or part("address", multiline=True)
     subdistrict = part("subdistrict")
     if subdistrict:
@@ -566,14 +565,14 @@ def _build_address(fields: Dict[str, List[str]], types: Tuple[str, ...]) -> Opti
         country=part("country"),
     )
     if not any(address.components()):
-        # Google's "Address N - Formatted" repeats the structured parts, so it
-        # is only used when they are all empty.
+        # "Address N - Formatted" ของ Google ซ้ำกับส่วนย่อยที่แยกไว้แล้ว
+        # จึงใช้เฉพาะเมื่อส่วนย่อยว่างทั้งหมด
         address.street = part("formatted", multiline=True)
     return address if any(address.components()) else None
 
 
 # --------------------------------------------------------------------------
-# vCard output
+# สร้างผลลัพธ์ vCard
 # --------------------------------------------------------------------------
 
 
@@ -583,10 +582,10 @@ def _content_line(name: str, value: str, types: Tuple[str, ...] = ()) -> str:
 
 
 def contact_to_vcard(contact: Contact) -> str:
-    """Render a Contact as a vCard 3.0 entry with CRLF line endings."""
+    """สร้าง vCard 3.0 ของ Contact หนึ่งรายการ โดยขึ้นบรรทัดใหม่ด้วย CRLF"""
     name_parts = (contact.family, contact.given, contact.middle, contact.prefix, contact.suffix)
     if not any(name_parts) and contact.full_name:
-        # Many phones build the displayed name from N, not FN.
+        # โทรศัพท์หลายรุ่นสร้างชื่อที่แสดงจาก N ไม่ใช่ FN
         name_parts = ("", contact.full_name, "", "", "")
 
     lines = [
@@ -603,7 +602,7 @@ def contact_to_vcard(contact: Contact) -> str:
     if contact.title:
         lines.append(_content_line("TITLE", escape_text(contact.title)))
     for phone, types in contact.phones:
-        # Phone values only contain characters from _PHONE_ALLOWED.
+        # ค่าเบอร์โทรมีเฉพาะอักขระใน _PHONE_ALLOWED
         lines.append(_content_line("TEL", phone, types))
     for email, types in contact.emails:
         lines.append(_content_line("EMAIL", escape_text(email), _dedupe(("INTERNET",) + types)))
@@ -611,7 +610,7 @@ def contact_to_vcard(contact: Contact) -> str:
         value = ";".join(escape_text(p) for p in address.components())
         lines.append(_content_line("ADR", value, address.types))
     for url in contact.urls:
-        # URL is a URI value (not TEXT); normalize_url rejects whitespace.
+        # URL เป็นค่าชนิด URI (ไม่ใช่ TEXT) และ normalize_url ไม่รับช่องว่าง
         lines.append(_content_line("URL", url))
     if contact.birthday:
         lines.append(_content_line("BDAY", contact.birthday))
@@ -622,15 +621,15 @@ def contact_to_vcard(contact: Contact) -> str:
 
 
 # --------------------------------------------------------------------------
-# CSV input
+# อ่านไฟล์ CSV
 # --------------------------------------------------------------------------
 
 
 def decode_csv_bytes(data: bytes, encoding: str = "auto") -> Tuple[str, str]:
-    """Decode raw CSV bytes; returns ``(text, encoding_used)``.
+    """ถอดรหัสไบต์ของไฟล์ CSV คืนค่า ``(text, encoding_used)``
 
-    ``auto`` honours a UTF-8/UTF-16 BOM, then tries UTF-8, then Windows Thai
-    (cp874), which is what Excel on Thai Windows writes by default.
+    โหมด ``auto`` ใช้ BOM ของ UTF-8/UTF-16 ถ้ามี จากนั้นลอง UTF-8 แล้วจึงลองภาษาไทย
+    Windows (cp874) ซึ่งเป็นค่าที่ Excel บน Windows ภาษาไทยใช้บันทึกโดยปริยาย
     """
     try:
         if encoding != "auto":
@@ -657,10 +656,10 @@ _SEP_HINT_RE = re.compile(r"^sep=(.)\r?\n")
 
 
 def detect_delimiter(text: str) -> str:
-    """Pick the delimiter that appears most often in the header line (default ",")."""
+    """เลือกตัวคั่นที่พบบ่อยที่สุดในบรรทัดหัวตาราง (ค่าเริ่มต้น ",")"""
     header = text.split("\n", 1)[0]
     counts = {d: header.count(d) for d in _DELIMITERS}
-    best = max(counts, key=lambda d: counts[d])  # ties resolve to ","
+    best = max(counts, key=lambda d: counts[d])  # ถ้าจำนวนเท่ากันจะได้ ","
     return best if counts[best] else ","
 
 
@@ -679,7 +678,7 @@ def iter_vcards(
     warn: Optional[WarnFn] = None,
     stats: Optional[Stats] = None,
 ) -> Iterator[str]:
-    """Yield one vCard string per usable row of the CSV *text*."""
+    """สร้าง vCard ทีละรายการ สำหรับแต่ละแถวที่ใช้ได้ใน CSV *text*"""
     options = options or Options()
     warn = warn or (lambda _line, _msg: None)
     stats = stats if stats is not None else Stats()
@@ -690,14 +689,14 @@ def iter_vcards(
         )
     if text.startswith("\ufeff"):
         text = text[1:]
-    hint = _SEP_HINT_RE.match(text)  # Excel's "sep=;" first line
+    hint = _SEP_HINT_RE.match(text)  # บรรทัดแรก "sep=;" ของ Excel
     if hint and hint.group(1) in _DELIMITERS:
         text = text[hint.end():]
         delimiter = delimiter or hint.group(1)
     delimiter = delimiter or detect_delimiter(text)
 
-    # strict: an unclosed quote must fail loudly instead of silently merging
-    # every following row into one contact.
+    # strict: เครื่องหมายคำพูดที่ไม่ปิดต้องแจ้ง error ให้ชัดเจน แทนที่จะรวม
+    # ทุกแถวที่ตามมาเป็นรายชื่อเดียวแบบเงียบ ๆ
     reader = csv.reader(io.StringIO(text, newline=""), delimiter=delimiter, strict=True)
     try:
         header: List[str] = []
@@ -731,7 +730,7 @@ def iter_vcards(
 
 
 # --------------------------------------------------------------------------
-# Files and command line
+# ไฟล์และ command line
 # --------------------------------------------------------------------------
 
 
@@ -777,11 +776,11 @@ _NO_CONTACTS = "ไม่มีรายชื่อที่แปลงได�
 def write_vcards(
     vcards: Iterable[str], output: str, force: bool = False, input_path: Optional[str] = None
 ) -> int:
-    """Write the vCards to *output* ("-" = stdout); returns how many were written.
+    """เขียน vCard ลง *output* ("-" = stdout) คืนค่าจำนวนรายการที่เขียน
 
-    A file is written to a private temporary file (mode 0600, contacts are
-    personal data) and atomically renamed into place, so a failure never
-    leaves a half-written .vcf behind or clobbers an existing file.
+    เขียนลงไฟล์ชั่วคราวส่วนตัวก่อน (สิทธิ์ 0600 เพราะรายชื่อเป็นข้อมูลส่วนบุคคล)
+    แล้วเปลี่ยนชื่อแทนที่แบบ atomic หากเกิดข้อผิดพลาด จึงไม่มีไฟล์ .vcf ที่เขียนค้าง
+    ครึ่งเดียว และไม่ทับไฟล์เดิม
     """
     if output == "-":
         count = 0
@@ -858,7 +857,7 @@ def build_parser() -> argparse.ArgumentParser:
 def main(argv: Optional[Sequence[str]] = None) -> int:
     args = build_parser().parse_args(argv)
     if hasattr(sys.stderr, "reconfigure"):
-        # Never crash on a console that cannot display Thai (e.g. cp437).
+        # ห้าม crash บน console ที่แสดงภาษาไทยไม่ได้ (เช่น cp437)
         sys.stderr.reconfigure(errors="backslashreplace")
 
     warning_count = 0

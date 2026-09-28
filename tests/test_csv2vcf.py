@@ -37,7 +37,7 @@ KNOWN_PROPERTIES = {
 
 
 def assert_well_formed(test, vcf):
-    """Every logical line is a known property; BEGIN/END pair up; CRLF only."""
+    """ทุกบรรทัดตรรกะเป็น property ที่รู้จัก, BEGIN/END จับคู่กันครบ และขึ้นบรรทัดด้วย CRLF เท่านั้น"""
     test.assertNotIn("\n", vcf.replace("\r\n", ""))
     test.assertTrue(vcf.endswith("\r\n"))
     depth = 0
@@ -53,7 +53,7 @@ def assert_well_formed(test, vcf):
     test.assertEqual(depth, 0)
     for physical in vcf.encode("utf-8").split(b"\r\n"):
         test.assertLessEqual(len(physical), 75)
-        physical.decode("utf-8")  # folding never splits a character
+        physical.decode("utf-8")  # การ fold ไม่ตัดกลางอักขระ
 
 
 class BasicConversionTest(unittest.TestCase):
@@ -249,7 +249,7 @@ class EscapingAndInjectionTest(unittest.TestCase):
         import csv
         import random
 
-        pieces = list("aZ09 ,;:\\\"'<>@.+-()/|*#\t\r\n\x1b\x7f\x85 ‮กำ่๑") + [
+        pieces = list("aZ09 ,;:\\\"'<>@.+-()/|*#\t\r\n\x1b\x7f\x85\u2028\u202eกำ่๑") + [
             "BEGIN:VCARD", "END:VCARD", "javascript:", "http://", ":::", "ต่อ",
         ]
         headers = [
@@ -308,7 +308,7 @@ class FieldNormalisationTest(unittest.TestCase):
         vcf, warnings = convert('Name,Phone,Mobile\nA,"081-111-1111, 0822222222 / 12",0811111111\n')
         tels = [line for line in props(vcf) if line.startswith("TEL")]
         self.assertEqual(tels, ["TEL:081-111-1111", "TEL:0822222222"])
-        self.assertEqual(len(warnings), 1)  # "12" has too few digits
+        self.assertEqual(len(warnings), 1)  # "12" มีตัวเลขน้อยเกินไป
 
     def test_emails(self):
         vcf, warnings = convert(
@@ -333,7 +333,7 @@ class FieldNormalisationTest(unittest.TestCase):
         )
 
     def test_email_patterns_are_linear(self):
-        # A 100 000-character cell took minutes with the old "<...@...>" pattern.
+        # pattern "<...@...>" แบบเก่าใช้เวลาหลายนาทีกับเซลล์ขนาด 100,000 อักขระ
         import time
 
         start = time.perf_counter()
@@ -385,7 +385,7 @@ class InputHandlingTest(unittest.TestCase):
         vcf, _ = convert("\ufeffsep=;\nName;Phone\nA;0811111111\n")
         self.assertIn("TEL:0811111111", props(vcf))
         with self.assertRaises(csv2vcf.ConversionError):
-            convert('sep="\nName,Phone\nA,0811111111\n')  # bogus hint is not obeyed
+            convert('sep="\nName,Phone\nA,0811111111\n')  # ไม่ทำตาม hint ที่ไม่ถูกต้อง
 
     def test_lone_surrogates_are_dropped(self):
         vcf, _ = convert("Name,Phone\nA\ud800B,0811111111\n")

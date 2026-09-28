@@ -1,7 +1,7 @@
 __pycache__/
 *.py[cod]
 
-# Converted contacts are personal data - keep them out of git.
+# รายชื่อที่แปลงแล้วเป็นข้อมูลส่วนบุคคล ห้ามเก็บเข้า git
 *.vcf
 *.csv
 !examples/*.csv
