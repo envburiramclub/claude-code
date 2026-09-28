@@ -17,6 +17,7 @@ import argparse
 import io
 import json
 import os
+import re
 import socket
 import socketserver
 import sys
@@ -71,6 +72,7 @@ SECURITY_HEADERS: List[Tuple[str, str]] = [
 ]
 
 StartResponse = Callable[..., object]
+_DIGITS_RE = re.compile(r"[0-9]{1,100}")  # ตัวเลข ASCII ล้วน (ยาวมากก็ยังเป็น 413 ไม่ใช่รูปแบบผิด)
 _STATUS = {
     200: "200 OK", 400: "400 Bad Request", 403: "403 Forbidden", 404: "404 Not Found",
     405: "405 Method Not Allowed", 408: "408 Request Timeout", 411: "411 Length Required",
@@ -169,10 +171,12 @@ class App:
             self.upload_slots.release()
 
     def _content_length(self, environ: dict) -> int:
-        try:
-            length = int(environ.get("CONTENT_LENGTH") or "")
-        except ValueError:
-            raise RequestError(411, "ต้องระบุขนาดไฟล์ (Content-Length)") from None
+        value = (environ.get("CONTENT_LENGTH") or "").strip()
+        # รับเฉพาะตัวเลข ASCII ล้วน int() ของ Python ยอมรับ "2_4", "+24" และตัวเลขภาษาอื่น
+        # ซึ่ง proxy ถือว่าผิดรูปแบบ การตีความไม่ตรงกันเป็นต้นทางของ request smuggling
+        if not _DIGITS_RE.fullmatch(value):
+            raise RequestError(411, "ต้องระบุขนาดไฟล์ (Content-Length) เป็นตัวเลข")
+        length = int(value)
         if length <= 0:
             raise RequestError(400, "ไม่ได้เลือกไฟล์ หรือไฟล์ว่างเปล่า")
         if length > self.max_bytes:
@@ -354,6 +358,9 @@ class _ServerHandler(ServerHandler):
 class RequestHandler(WSGIRequestHandler):
     server_version = "csv2vcf"
     sys_version = ""
+    # หน้า error ที่ http.server สร้างเอง (400, 414, 431, 505) เป็นข้อความธรรมดาแทน HTML
+    error_content_type = "text/plain; charset=utf-8"
+    error_message_format = "%(code)d %(message)s\n"
     timeout = IDLE_TIMEOUT
     read_deadline = READ_DEADLINE
     write_deadline = WRITE_DEADLINE
@@ -417,6 +424,12 @@ class Server(socketserver.ThreadingMixIn, WSGIServer):
         finally:
             self._connections.release()
 
+    def handle_error(self, request, client_address):  # type: ignore[no-untyped-def]
+        # ข้อความของ exception อาจมีข้อมูลจาก client escape อักขระควบคุมทีละบรรทัดก่อนเขียน log
+        lines = [f"เกิดข้อผิดพลาดระหว่างจัดการคำขอจาก {client_address[0]}"]
+        lines += traceback.format_exc().splitlines()
+        sys.stderr.write("".join(csv2vcf.escape_controls(line) + "\n" for line in lines))
+
 
 def make_server(
     host: str,
@@ -432,14 +445,14 @@ def make_server(
 
 
 def _port_arg(value: str) -> int:
-    if not value.isdigit() or not 0 <= int(value) <= 65535:
+    if not _DIGITS_RE.fullmatch(value) or not 0 <= int(value) <= 65535:
         raise argparse.ArgumentTypeError("ต้องเป็นตัวเลข 0-65535")
     return int(value)
 
 
 def _bounded_int_arg(low: int, high: int) -> Callable[[str], int]:
     def parse(value: str) -> int:
-        if not value.isdigit() or not low <= int(value) <= high:
+        if not _DIGITS_RE.fullmatch(value) or not low <= int(value) <= high:
             raise argparse.ArgumentTypeError(f"ต้องเป็นจำนวนเต็ม {low}-{high}")
         return int(value)
 
@@ -495,7 +508,7 @@ def _env_int(name: str, default: int, low: int, high: int) -> int:
     value = os.environ.get(name, "").strip()
     if not value:
         return default
-    if not value.isdigit() or not low <= int(value) <= high:
+    if not _DIGITS_RE.fullmatch(value) or not low <= int(value) <= high:
         raise SystemExit(f"webapp: ผิดพลาด: {name} ต้องเป็นจำนวนเต็ม {low}-{high}")
     return int(value)
 

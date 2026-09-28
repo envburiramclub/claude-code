@@ -8,6 +8,7 @@ import sys
 import threading
 import time
 import unittest
+from unittest import mock
 from wsgiref.util import setup_testing_defaults
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -183,6 +184,16 @@ class ConvertApiTest(unittest.TestCase):
 
         body = b"".join(self.app(environ, start_response))
         return result["status"], None, body
+
+    def test_content_length_must_be_plain_digits(self):
+        # int() ของ Python รับค่าเหล่านี้ได้ แต่ proxy ถือว่าผิดรูปแบบ (ต้นทางของ request smuggling)
+        headers = {"X-Requested-With": "csv2vcf"}
+        for value in ("2_4", "+24", "24.0", "0x18", "\u0e52\u0e54", "\u0968\u096a", "1e3", "9" * 101):
+            status, _, body = self._raw(value, headers, b"Name,Phone\nA,0811111111\n")
+            self.assertEqual(status, 411, value)
+            self.assertFalse(json.loads(body)["ok"])
+        status, _, _ = self._raw(" 24 ", headers, b"Name,Phone\nA,0811111111\n")
+        self.assertEqual(status, 200)
 
     def test_truncated_body(self):
         status, _, body = self._raw("500", {"X-Requested-With": "csv2vcf"}, b"Name,Phone\n")
@@ -395,6 +406,35 @@ class RealServerTest(unittest.TestCase):
         with contextlib.redirect_stderr(io.StringIO()):
             self.assertEqual(self.request(port)[0], 200)
 
+    def test_builtin_error_pages_are_plain_text(self):
+        port = self.start()
+        for request in (b"GET /" + b"a" * 70000 + b" HTTP/1.1\r\n\r\n", b"GET / HTTP/1.1\r\n" + b"X: 1\r\n" * 150 + b"\r\n"):
+            with socket.create_connection(("127.0.0.1", port), timeout=5) as sock:
+                sock.sendall(request)
+                response = b""
+                while True:
+                    chunk = sock.recv(65536)
+                    if not chunk:
+                        break
+                    response += chunk
+            head = response.split(b"\r\n\r\n", 1)[0].lower()
+            self.assertIn(b"content-type: text/plain", head)
+            self.assertNotIn(b"<html", response.lower())
+
+    def test_server_errors_are_logged_escaped(self):
+        server = webapp.make_server("127.0.0.1", 0, webapp.App())
+        self.addCleanup(server.server_close)
+        err = io.StringIO()
+        try:
+            raise ValueError("bad \x1b[2J\x07 input")
+        except ValueError:
+            with contextlib.redirect_stderr(err):
+                server.handle_error(None, ("192.0.2.1", 5555))
+        self.assertIn("192.0.2.1", err.getvalue())
+        self.assertIn("ValueError", err.getvalue())
+        self.assertNotIn("\x1b", err.getvalue())
+        self.assertNotIn("\x07", err.getvalue())
+
     def test_large_result_is_sent_in_chunks(self):
         # ผลลัพธ์ใหญ่กว่าหนึ่งช่วงของการส่ง ต้องมาครบ
         port = self.start()
@@ -411,7 +451,7 @@ class RealServerTest(unittest.TestCase):
 class CommandLineTest(unittest.TestCase):
     def test_environment_settings(self):
         self.assertEqual(webapp._env_int("CSV2VCF_TEST_UNSET", 7, 1, 10), 7)
-        for value, ok in (("5", True), ("0", False), ("abc", False), ("11", False)):
+        for value, ok in (("5", True), ("0", False), ("abc", False), ("11", False), ("\u0e55", False), ("\u00b2", False), ("1_0", False)):
             os.environ["CSV2VCF_TEST_VALUE"] = value
             try:
                 if ok:
@@ -423,9 +463,15 @@ class CommandLineTest(unittest.TestCase):
                 del os.environ["CSV2VCF_TEST_VALUE"]
 
     def test_bad_arguments(self):
-        for argv in (["--port", "70000"], ["--port", "x"], ["--max-size", "0"], ["--workers", "99"]):
+        for argv in (
+            ["--port", "70000"], ["--port", "x"], ["--max-size", "0"], ["--workers", "99"],
+            ["--port", "\u00b2"], ["--port", "8_000"], ["--max-size", "\u0e51\u0e50"], ["--workers", "+2"],
+        ):
             err = io.StringIO()
-            with contextlib.redirect_stderr(err), self.assertRaises(SystemExit) as ctx:
+            # ถ้าค่าผิดหลุดผ่านไปได้ ให้ fail ทันที ไม่ใช่เปิดเซิร์ฟเวอร์จริงค้างไว้
+            no_server = AssertionError("ไม่ควรเปิดเซิร์ฟเวอร์ด้วย %r" % (argv,))
+            with mock.patch.object(webapp, "make_server", side_effect=no_server), \
+                    contextlib.redirect_stderr(err), self.assertRaises(SystemExit) as ctx:
                 webapp.main(argv)
             self.assertEqual(ctx.exception.code, 2, argv)
             self.assertIn("ผิดพลาด", err.getvalue())

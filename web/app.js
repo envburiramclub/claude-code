@@ -21,7 +21,9 @@
   let file = null;
   let downloadUrl = null;
 
-  $("max-mb").textContent = String(maxMb);
+  $("max-mb").textContent = String(maxMb); // ต้องใส่ก่อนเก็บข้อความเริ่มต้นด้านล่าง
+  const defaultTitle = $("drop-title").textContent;
+  const defaultHint = $("drop-hint").textContent;
 
   function setStatus(message, kind) {
     status.textContent = message;
@@ -41,7 +43,8 @@
     file = null;
     button.disabled = true;
     drop.classList.remove("has-file");
-    $("drop-title").textContent = "เลือกไฟล์ CSV หรือลากไฟล์มาวางที่นี่";
+    $("drop-title").textContent = defaultTitle;
+    $("drop-hint").textContent = defaultHint;
     if (!candidate) {
       setStatus("");
       return;
@@ -72,7 +75,11 @@
     return (bytes / 1024 / 1024).toFixed(1) + " MB";
   }
 
-  input.addEventListener("change", () => chooseFile(input.files[0] || null));
+  input.addEventListener("change", () => {
+    chooseFile(input.files[0] || null);
+    // ล้างค่าในช่อง เพื่อให้เลือกไฟล์ชื่อเดิมซ้ำได้ (เช่น หลังแก้ไฟล์ CSV) ตัวแปร file ยังเก็บไฟล์ไว้
+    input.value = "";
+  });
 
   ["dragenter", "dragover"].forEach((type) =>
     drop.addEventListener(type, (event) => {
