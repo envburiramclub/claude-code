@@ -22,11 +22,13 @@ import errno
 import io
 import os
 import re
+import shutil
 import sys
 import tempfile
 import unicodedata
+import urllib.parse
 from dataclasses import dataclass, field
-from typing import Callable, Dict, Iterable, Iterator, List, Optional, Sequence, Tuple
+from typing import IO, Callable, Dict, Iterable, Iterator, List, Optional, Sequence, Tuple
 
 __version__ = "1.0.0"
 
@@ -109,13 +111,17 @@ def show(value: str, limit: int = 60) -> str:
     """
     if len(value) > limit:
         value = value[:limit] + "..."
-    out = []
-    for ch in value:
-        if unicodedata.category(ch) in ("Cc", "Cf", "Zl", "Zp"):
-            out.append(ch.encode("unicode_escape").decode("ascii"))
-        else:
-            out.append(ch)
-    return '"' + "".join(out) + '"'
+    return '"' + escape_controls(value) + '"'
+
+
+def escape_controls(value: str) -> str:
+    """แปลงอักขระควบคุมและอักขระจัดรูปแบบเป็น escape (เช่น \\x1b) ก่อนแสดงบน terminal"""
+    return "".join(
+        ch.encode("unicode_escape").decode("ascii")
+        if unicodedata.category(ch) in ("Cc", "Cf", "Zl", "Zp")
+        else ch
+        for ch in value
+    )
 
 
 def _ascii_digits(value: str) -> str:
@@ -134,6 +140,8 @@ _PHONE_SPLIT_RE = re.compile(r":::|[;,/|\n]")
 _PHONE_EXT_RE = re.compile(r"\s*(?:ต่อ|extension|ext\.?|x)\s*(?=\d)", re.IGNORECASE)
 _EXCEL_SCI_RE = re.compile(r"^[+-]?\d+(?:\.\d+)?[eE][+-]?\d+$")
 _PHONE_ALLOWED = frozenset("0123456789+-(). *#,")
+_PHONE_PAREN_PLUS_RE = re.compile(r"^\(\s*\+\s*(\d{1,4})\s*\)")  # "(+66) 81..." -> "+66 81..."
+_PHONE_TRUNK_ZERO_RE = re.compile(r"\(\s*0\s*\)")  # "+44 (0)20..." -> "+44 20..."
 _MAX_PHONE_LEN = 40
 
 
@@ -152,10 +160,13 @@ def normalize_phone(
     value = _PHONE_EXT_RE.sub(",", value)  # "ต่อ 12" / "ext 12" -> หยุดรอ (pause) แล้วกดเบอร์ต่อ
     kept = [ch for ch in value if ch in _PHONE_ALLOWED]
     dropped = len(kept) != len(value)
-    phone = " ".join("".join(kept).split())
+    phone = _PHONE_PAREN_PLUS_RE.sub(r"+\1 ", " ".join("".join(kept).split()))
     # "+" มีความหมายเฉพาะเมื่อเป็นอักขระตัวแรกเท่านั้น
     phone = phone[:1] + phone[1:].replace("+", "")
-    phone = phone.strip(" -.,")
+    if phone.startswith("+"):
+        # เลข 0 ในวงเล็บคือเลขที่ใช้โทรในประเทศ ห้ามกดเมื่อโทรแบบมีรหัสประเทศ
+        phone = _PHONE_TRUNK_ZERO_RE.sub(" ", phone)
+    phone = " ".join(phone.split()).strip(" -.,")
     digits = sum(ch.isdigit() for ch in phone)
     if digits < 3 or len(phone) > _MAX_PHONE_LEN:
         return None, f"ข้ามเบอร์โทรที่ไม่ถูกต้อง {show(raw)}"
@@ -208,10 +219,21 @@ def normalize_url(raw: str) -> Optional[str]:
         return None
     match = _URL_SCHEME_RE.match(value)
     if match:
-        if match.group(1).lower() not in ("http", "https") or "://" not in value:
+        if match.group(1).lower() not in ("http", "https") or not value[match.end():].startswith("//"):
             return None
-        return value
-    return "https://" + value.lstrip("/")
+    else:
+        value = "https://" + value.lstrip("/")
+    try:
+        parts = urllib.parse.urlsplit(value)
+        host = parts.hostname
+        parts.port  # noqa: B018 -- ตรวจว่าพอร์ตเป็นตัวเลขที่ถูกต้อง (ถ้าไม่ถูกจะเกิด ValueError)
+    except ValueError:
+        return None
+    # "https://www.bank.co.th@evil.example" แสดงเหมือนลิงก์ธนาคาร แต่จริง ๆ พาไป
+    # evil.example จึงไม่รับ URL ที่มีชื่อผู้ใช้/รหัสผ่าน (และไม่ควรเก็บรหัสผ่านไว้ในลิงก์)
+    if not host or "@" in parts.netloc:
+        return None
+    return value
 
 
 _DATE_YMD_RE = re.compile(r"^(\d{4})-(\d{1,2})-(\d{1,2})(?:[ T].*)?$")
@@ -476,7 +498,11 @@ def build_contact(
     groups: Dict[Tuple, Tuple[Column, Dict[str, List[str]]]] = {}
 
     for index, column in columns:
-        raw = row[index] if index < len(row) else ""
+        # columns เรียงตาม index จากน้อยไปมาก หยุดเมื่อเลยช่องสุดท้ายของแถว ไม่เช่นนั้น
+        # หัวตารางหลายแสนคอลัมน์ x แถวสั้น ๆ หลายแสนแถว จะใช้เวลาแบบกำลังสอง (DoS)
+        if index >= len(row):
+            break
+        raw = row[index]
         if not raw.strip():
             continue
         if column.kind in ("name", "org"):
@@ -654,11 +680,13 @@ def decode_csv_bytes(data: bytes, encoding: str = "auto") -> Tuple[str, str]:
 
 _DELIMITERS = (",", ";", "\t", "|")
 _SEP_HINT_RE = re.compile(r"^sep=(.)\r?\n")
+_QUOTED_RE = re.compile(r'"[^"]*"')
 
 
 def detect_delimiter(text: str) -> str:
     """เลือกตัวคั่นที่พบบ่อยที่สุดในบรรทัดหัวตาราง (ค่าเริ่มต้น ",")"""
-    header = text.split("\n", 1)[0]
+    # ไม่นับตัวคั่นที่อยู่ในเครื่องหมายคำพูด เช่น "Name, Full";Phone ใช้ ; เป็นตัวคั่น
+    header = _QUOTED_RE.sub("", text.split("\n", 1)[0])
     counts = {d: header.count(d) for d in _DELIMITERS}
     best = max(counts, key=lambda d: counts[d])  # ถ้าจำนวนเท่ากันจะได้ ","
     return best if counts[best] else ","
@@ -695,6 +723,8 @@ def iter_vcards(
         text = text[hint.end():]
         delimiter = delimiter or hint.group(1)
     delimiter = delimiter or detect_delimiter(text)
+    if not isinstance(delimiter, str) or len(delimiter) != 1 or delimiter in '"\r\n':
+        raise ConversionError(f"ตัวคั่นคอลัมน์ไม่ถูกต้อง {show(str(delimiter))}")
 
     # strict: เครื่องหมายคำพูดที่ไม่ปิดต้องแจ้ง error ให้ชัดเจน แทนที่จะรวม
     # ทุกแถวที่ตามมาเป็นรายชื่อเดียวแบบเงียบ ๆ
@@ -772,6 +802,15 @@ def _check_output_path(output: str, force: bool, input_path: Optional[str]) -> N
 
 
 _NO_CONTACTS = "ไม่มีรายชื่อที่แปลงได้เลย จึงไม่สร้างไฟล์ผลลัพธ์"
+_SPOOL_IN_MEMORY = 16 * 1024 * 1024
+
+
+def _write_all(vcards: Iterable[str], fh: IO[bytes]) -> int:
+    count = 0
+    for card in vcards:
+        fh.write(card.encode("utf-8"))
+        count += 1
+    return count
 
 
 def write_vcards(
@@ -784,24 +823,29 @@ def write_vcards(
     ครึ่งเดียว และไม่ทับไฟล์เดิม
     """
     if output == "-":
-        count = 0
-        for card in vcards:
-            sys.stdout.buffer.write(card.encode("utf-8"))
-            count += 1
+        # พักผลลัพธ์ไว้ก่อน แล้วส่งออกทีเดียวเมื่อแปลงครบ ถ้า CSV เสียกลางไฟล์จะได้ไม่มี
+        # ผลลัพธ์ครึ่งเดียวหลุดออกไป (เช่น ตอนใช้ -o - > out.vcf) ข้อมูลเกิน
+        # _SPOOL_IN_MEMORY จะย้ายไปไฟล์ชั่วคราวส่วนตัวที่ระบบลบให้เอง
+        with tempfile.SpooledTemporaryFile(max_size=_SPOOL_IN_MEMORY) as spool:
+            count = _write_all(vcards, spool)
+            if not count:
+                raise ConversionError(_NO_CONTACTS)
+            spool.seek(0)
+            shutil.copyfileobj(spool, sys.stdout.buffer)
         sys.stdout.buffer.flush()
-        if not count:
-            raise ConversionError(_NO_CONTACTS)
         return count
 
     _check_output_path(output, force, input_path)
     directory = os.path.dirname(os.path.abspath(output))
-    fd, tmp_path = tempfile.mkstemp(prefix=".csv2vcf-", suffix=".tmp", dir=directory)
+    try:
+        fd, tmp_path = tempfile.mkstemp(prefix=".csv2vcf-", suffix=".tmp", dir=directory)
+    except OSError as exc:
+        # แจ้งชื่อไฟล์ผลลัพธ์ แทนชื่อไฟล์ชั่วคราวที่ผู้ใช้ไม่รู้จัก
+        raise OSError(exc.errno, exc.strerror, output) from exc
     count = 0
     try:
         with os.fdopen(fd, "wb") as fh:
-            for card in vcards:
-                fh.write(card.encode("utf-8"))
-                count += 1
+            count = _write_all(vcards, fh)
         if not count:
             raise ConversionError(_NO_CONTACTS)
         os.replace(tmp_path, output)
@@ -844,27 +888,46 @@ class _ThaiHelpFormatter(argparse.HelpFormatter):
 
 
 # ข้อความ error ภาษาอังกฤษของ argparse -> ภาษาไทย ข้อความที่ไม่อยู่ในรายการจะแสดงตามเดิม
-_ARGPARSE_ERRORS: List[Tuple["re.Pattern[str]", str]] = [
-    (re.compile(r"^the following arguments are required: (.+)$", re.S), r"ต้องระบุ \1"),
-    (re.compile(r"^unrecognized arguments: (.+)$", re.S), r"ไม่รู้จักอาร์กิวเมนต์ \1"),
-    (re.compile(r"^expected one argument$"), "ต้องระบุค่าหนึ่งค่า"),
-    (re.compile(r"^expected at most one argument$"), "ระบุค่าได้ไม่เกินหนึ่งค่า"),
-    (re.compile(r"^invalid choice: (.+) \(choose from (.+)\)$", re.S), r"ค่าไม่ถูกต้อง \1 (เลือกได้จาก \2)"),
-    (re.compile(r"^ambiguous option: (\S+) could match (.+)$", re.S), r"ตัวเลือก \1 กำกวม อาจหมายถึง \2"),
-    (re.compile(r"^ignored explicit argument (.+)$", re.S), r"ตัวเลือกนี้ไม่รับค่า \1"),
-    (re.compile(r"^invalid \S+ value: (.+)$", re.S), r"ค่าไม่ถูกต้อง \1"),
-]
-_ARGPARSE_ARGUMENT_RE = re.compile(r"^argument (\S+): (.*)$", re.S)
+# (จับเฉพาะคำนำหน้าและวลีคงที่ จึงไม่มี regex ที่ backtrack กับค่าจาก argv)
+_ARGPARSE_EXACT = {
+    "expected one argument": "ต้องระบุค่าหนึ่งค่า",
+    "expected at most one argument": "ระบุค่าได้ไม่เกินหนึ่งค่า",
+}
+_ARGPARSE_PREFIXES = (
+    ("the following arguments are required: ", "ต้องระบุ "),
+    ("unrecognized arguments: ", "ไม่รู้จักอาร์กิวเมนต์ "),
+    ("invalid choice: ", "ค่าไม่ถูกต้อง "),
+    ("ambiguous option: ", "ตัวเลือกกำกวม "),
+    ("ignored explicit argument ", "ตัวเลือกนี้ไม่รับค่า "),
+)
+# argparse ต่อวลีเหล่านี้ไว้ท้ายข้อความ จึงแทนที่ตัวสุดท้าย (ค่าจาก argv อยู่ก่อนหน้า)
+_ARGPARSE_PHRASES = ((" (choose from ", " (เลือกได้จาก "), (" could match ", " อาจหมายถึง "))
+_ARGPARSE_INVALID_VALUE_RE = re.compile(r"^invalid \S+ value: ")
 
 
 def _translate_argparse_error(message: str) -> str:
-    match = _ARGPARSE_ARGUMENT_RE.match(message)
-    if match:
-        return f"อาร์กิวเมนต์ {match.group(1)}: {_translate_argparse_error(match.group(2))}"
-    for pattern, replacement in _ARGPARSE_ERRORS:
-        if pattern.match(message):
-            return pattern.sub(replacement, message)
-    return message
+    """แปลข้อความ error ของ argparse เป็นภาษาไทย และ escape อักขระควบคุมที่มาจาก argv"""
+    prefix = ""
+    if message.startswith("argument "):
+        name, sep, rest = message[len("argument "):].partition(": ")
+        if sep and " " not in name:
+            prefix, message = f"อาร์กิวเมนต์ {name}: ", rest
+    if message in _ARGPARSE_EXACT:
+        message = _ARGPARSE_EXACT[message]
+    else:
+        for english, thai in _ARGPARSE_PREFIXES:
+            if message.startswith(english):
+                message = thai + message[len(english):]
+                for old, new in _ARGPARSE_PHRASES:
+                    head, found, tail = message.rpartition(old)
+                    if found:
+                        message = head + new + tail
+                break
+        else:
+            match = _ARGPARSE_INVALID_VALUE_RE.match(message)
+            if match:
+                message = "ค่าไม่ถูกต้อง " + message[match.end():]
+    return escape_controls(prefix + message)
 
 
 class _ThaiArgumentParser(argparse.ArgumentParser):
@@ -935,12 +998,18 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         data = read_input(args.input, args.max_size * 1024 * 1024)
         text, used_encoding = decode_csv_bytes(data, args.encoding)
         if args.encoding == "auto" and used_encoding == "cp874":
-            print("หมายเหตุ: ไฟล์ไม่ใช่ UTF-8 จึงอ่านเป็นภาษาไทย Windows (cp874)", file=sys.stderr)
+            print("หมายเหตุ: ไฟล์ไม่ใช่ UTF-8 จึงอ่านเป็นภาษาไทย Windows (cp874) ถ้าตัวอักษรเพี้ยนให้ระบุ --encoding", file=sys.stderr)
         options = Options(country_code=args.country_code, date_order=args.date_order)
         vcards = iter_vcards(text, args.delimiter, options, warn, stats)
         written = write_vcards(vcards, output, force=args.force, input_path=args.input)
     except ConversionError as exc:
         print(f"csv2vcf: ผิดพลาด: {exc}", file=sys.stderr)
+        return 1
+    except BrokenPipeError:
+        # โปรแกรมปลายทางปิดรับข้อมูลก่อน (เช่น | head) ไม่ใช่ความผิดของไฟล์ จึงออกเงียบ ๆ
+        # และชี้ stdout ไปที่ devnull ไม่ให้ Python แจ้ง error ซ้ำตอนปิดโปรแกรม
+        with contextlib.suppress(OSError, ValueError, AttributeError):
+            os.dup2(os.open(os.devnull, os.O_WRONLY), sys.stdout.fileno())
         return 1
     except OSError as exc:
         where = f" {show(str(exc.filename), PATH_SHOW_LIMIT)}" if exc.filename else ""

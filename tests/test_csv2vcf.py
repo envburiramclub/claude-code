@@ -292,6 +292,13 @@ class FieldNormalisationTest(unittest.TestCase):
         for raw, expected in cases.items():
             self.assertEqual(csv2vcf.normalize_phone(raw)[0], expected, raw)
 
+    def test_international_phone_formats(self):
+        self.assertEqual(csv2vcf.normalize_phone("(+66) 81-234-5678")[0], "+66 81-234-5678")
+        self.assertEqual(csv2vcf.normalize_phone("( +66 ) 81 234 5678", "66")[0], "+66 81 234 5678")
+        self.assertEqual(csv2vcf.normalize_phone("+44 (0)20 7946 0000")[0], "+44 20 7946 0000")
+        self.assertEqual(csv2vcf.normalize_phone("+66(0)81-234-5678")[0], "+66 81-234-5678")
+        self.assertEqual(csv2vcf.normalize_phone("(02) 123-4567")[0], "(02) 123-4567")
+
     def test_invalid_phones(self):
         for raw in ("12", "abc", "8.12345678E+08", "1" * 41, "---"):
             phone, warning = csv2vcf.normalize_phone(raw)
@@ -348,6 +355,8 @@ class FieldNormalisationTest(unittest.TestCase):
         self.assertEqual(csv2vcf.normalize_url("example.com"), "https://example.com")
         self.assertEqual(csv2vcf.normalize_url("www.ex.com:8080/a"), "https://www.ex.com:8080/a")
         self.assertEqual(csv2vcf.normalize_url("http://ok.test/a?b=1"), "http://ok.test/a?b=1")
+        self.assertEqual(csv2vcf.normalize_url("https://[::1]:8080/x"), "https://[::1]:8080/x")
+        self.assertEqual(csv2vcf.normalize_url("https://medium.com/@user"), "https://medium.com/@user")
         for bad in (
             "javascript:alert(1)",
             "JaVaScRiPt:alert(1)",
@@ -358,6 +367,14 @@ class FieldNormalisationTest(unittest.TestCase):
             "https://ex.com/<script>",
             "https://ex.com/a b",
             "https:\\\\evil.com",
+            "https://www.bank.co.th@evil.example/login",
+            "https://user:password@example.com/",
+            "user@example.com",
+            "https://",
+            "https:///path",
+            "https://[bad",
+            "https://example.com:99999",
+            "https://example.com:abc",
         ):
             self.assertIsNone(csv2vcf.normalize_url(bad), bad)
 
@@ -390,6 +407,27 @@ class InputHandlingTest(unittest.TestCase):
     def test_lone_surrogates_are_dropped(self):
         vcf, _ = convert("Name,Phone\nA\ud800B,0811111111\n")
         self.assertIn("FN:AB", props(vcf))
+
+    def test_delimiter_detection_ignores_quoted_text(self):
+        vcf, _ = convert('Name;Phone;"Note, with, many, commas"\n"Doe, John";0811111111;x\n')
+        self.assertIn("FN:Doe\\, John", props(vcf))
+        self.assertIn("TEL:0811111111", props(vcf))
+
+    def test_invalid_delimiter_from_api(self):
+        for bad in ("ab", '"', "\n"):
+            with self.assertRaises(csv2vcf.ConversionError):
+                convert("Name\nA\n", delimiter=bad)
+
+    def test_wide_header_with_short_rows_is_linear(self):
+        # หัวตาราง 10,000 คอลัมน์ x 10,000 แถวสั้น ๆ: โค้ดเดิมวนครบทุกคอลัมน์ทุกแถว
+        # (เวลาแบบกำลังสอง) ไฟล์ไม่กี่ MB ก็ทำให้โปรแกรมค้างได้เป็นชั่วโมง
+        import time
+
+        text = ",".join(["Phone"] * 10000) + "\n" + "0811111111\n" * 10000
+        start = time.perf_counter()
+        vcf, _ = convert(text)
+        self.assertLess(time.perf_counter() - start, 2.0)
+        self.assertEqual(vcf.count("BEGIN:VCARD"), 10000)
 
     def test_explicit_delimiter(self):
         vcf, _ = convert("Name|Phone\nA|0811111111\n", delimiter="|")
@@ -539,6 +577,58 @@ class CommandLineTest(unittest.TestCase):
         self.assertEqual(code, 0, err.getvalue())
         self.assertEqual(buffer.getvalue().count(b"BEGIN:VCARD"), 2)
 
+    def test_stdout_gets_nothing_when_csv_is_broken(self):
+        with open(self.csv_path, "w", encoding="utf-8") as fh:
+            fh.write('Name,Phone\nA,0811111111\nB,0822222222\n"C,0833333333\n')
+        buffer = io.BytesIO()
+        fake_stdout = io.TextIOWrapper(buffer, encoding="utf-8")
+        err = io.StringIO()
+        with contextlib.redirect_stdout(fake_stdout), contextlib.redirect_stderr(err):
+            code = csv2vcf.main([self.csv_path, "-o", "-"])
+        fake_stdout.flush()
+        self.assertEqual(code, 1)
+        self.assertEqual(buffer.getvalue(), b"")  # ไม่มีรายชื่อครึ่งเดียวหลุดออกไป
+
+    def test_closed_pipe_exits_quietly(self):
+        import subprocess
+
+        with open(self.csv_path, "w", encoding="utf-8") as fh:
+            fh.write("Name,Phone\n" + "".join("P%d,08%08d\n" % (i, i) for i in range(30000)))
+        script = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "csv2vcf.py")
+        proc = subprocess.Popen(
+            [sys.executable, script, self.csv_path, "-o", "-"],
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+        )
+        proc.stdout.read(100)
+        proc.stdout.close()  # เหมือน | head ที่ปิดท่อก่อนอ่านจบ
+        stderr = proc.stderr.read()
+        proc.stderr.close()
+        proc.wait(timeout=60)
+        self.assertEqual(proc.returncode, 1)
+        for text in (b"Traceback", b"Exception ignored", b"Broken pipe"):
+            self.assertNotIn(text, stderr)
+
+    def test_unwritable_output_folder_names_the_output_file(self):
+        from unittest import mock
+
+        out = os.path.join(self.dir, "out.vcf")
+        error = PermissionError(13, "Permission denied", os.path.join(self.dir, ".csv2vcf-x.tmp"))
+        with mock.patch.object(csv2vcf.tempfile, "mkstemp", side_effect=error):
+            code, err = self.run_main(self.csv_path, "-o", out)
+        self.assertEqual(code, 1)
+        self.assertIn("out.vcf", err)
+        self.assertIn("ไม่มีสิทธิ์เข้าถึง", err)
+        self.assertNotIn(".csv2vcf-x.tmp", err)
+
+    def test_argument_errors_escape_control_characters(self):
+        err = io.StringIO()
+        with contextlib.redirect_stderr(err), self.assertRaises(SystemExit):
+            csv2vcf.main([self.csv_path, "--x\x1b[2J\x07"])
+        self.assertNotIn("\x1b", err.getvalue())
+        self.assertNotIn("\x07", err.getvalue())
+        self.assertIn("\\x1b[2J", err.getvalue())
+
     def test_warnings_do_not_leak_terminal_escapes(self):
         with open(self.csv_path, "w", encoding="utf-8") as fh:
             fh.write("Name,Email,\x1b[31mCol\n\x1b]0;x\x07A,bad\x1b[2J,\n")
@@ -572,7 +662,7 @@ class CommandLineTest(unittest.TestCase):
             ("a.csv", "--date-order", "xyz"): "อาร์กิวเมนต์ --date-order: ค่าไม่ถูกต้อง 'xyz'",
             ("a.csv", "--bogus"): "ไม่รู้จักอาร์กิวเมนต์ --bogus",
             ("a.csv", "-o"): "อาร์กิวเมนต์ -o/--output: ต้องระบุค่าหนึ่งค่า",
-            ("a.csv", "--d", "x"): "ตัวเลือก --d กำกวม",
+            ("a.csv", "--d", "x"): "ตัวเลือกกำกวม --d อาจหมายถึง --delimiter, --date-order",
             ("a.csv", "--force=1"): "อาร์กิวเมนต์ -f/--force: ตัวเลือกนี้ไม่รับค่า '1'",
         }
         for argv, expected in cases.items():
