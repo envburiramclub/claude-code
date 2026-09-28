@@ -18,6 +18,7 @@ import codecs
 import contextlib
 import csv
 import datetime
+import errno
 import io
 import os
 import re
@@ -835,30 +836,90 @@ def _max_size_arg(value: str) -> int:
     return size
 
 
+class _ThaiHelpFormatter(argparse.HelpFormatter):
+    """HelpFormatter ที่ขึ้นต้นบรรทัดวิธีใช้ด้วย "วิธีใช้:" แทน "usage:" """
+
+    def add_usage(self, usage, actions, groups, prefix=None):  # type: ignore[no-untyped-def]
+        super().add_usage(usage, actions, groups, "วิธีใช้: " if prefix is None else prefix)
+
+
+# ข้อความ error ภาษาอังกฤษของ argparse -> ภาษาไทย ข้อความที่ไม่อยู่ในรายการจะแสดงตามเดิม
+_ARGPARSE_ERRORS: List[Tuple["re.Pattern[str]", str]] = [
+    (re.compile(r"^the following arguments are required: (.+)$", re.S), r"ต้องระบุ \1"),
+    (re.compile(r"^unrecognized arguments: (.+)$", re.S), r"ไม่รู้จักอาร์กิวเมนต์ \1"),
+    (re.compile(r"^expected one argument$"), "ต้องระบุค่าหนึ่งค่า"),
+    (re.compile(r"^expected at most one argument$"), "ระบุค่าได้ไม่เกินหนึ่งค่า"),
+    (re.compile(r"^invalid choice: (.+) \(choose from (.+)\)$", re.S), r"ค่าไม่ถูกต้อง \1 (เลือกได้จาก \2)"),
+    (re.compile(r"^ambiguous option: (\S+) could match (.+)$", re.S), r"ตัวเลือก \1 กำกวม อาจหมายถึง \2"),
+    (re.compile(r"^ignored explicit argument (.+)$", re.S), r"ตัวเลือกนี้ไม่รับค่า \1"),
+    (re.compile(r"^invalid \S+ value: (.+)$", re.S), r"ค่าไม่ถูกต้อง \1"),
+]
+_ARGPARSE_ARGUMENT_RE = re.compile(r"^argument (\S+): (.*)$", re.S)
+
+
+def _translate_argparse_error(message: str) -> str:
+    match = _ARGPARSE_ARGUMENT_RE.match(message)
+    if match:
+        return f"อาร์กิวเมนต์ {match.group(1)}: {_translate_argparse_error(match.group(2))}"
+    for pattern, replacement in _ARGPARSE_ERRORS:
+        if pattern.match(message):
+            return pattern.sub(replacement, message)
+    return message
+
+
+class _ThaiArgumentParser(argparse.ArgumentParser):
+    """ArgumentParser ที่แสดงข้อความ error เป็นภาษาไทย"""
+
+    def error(self, message: str):  # type: ignore[override]
+        self.print_usage(sys.stderr)
+        self.exit(2, f"{self.prog}: ผิดพลาด: {_translate_argparse_error(message)}\n")
+
+
 def build_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(
+    parser = _ThaiArgumentParser(
         prog="csv2vcf",
         description="แปลงไฟล์รายชื่อผู้ติดต่อ .csv เป็นไฟล์ vCard 3.0 (.vcf) "
         "สำหรับนำเข้า Android, iPhone, Google Contacts และ Outlook",
+        formatter_class=_ThaiHelpFormatter,
+        add_help=False,  # เพิ่ม -h เองด้านล่าง เพื่อให้คำอธิบายเป็นภาษาไทย
     )
-    parser.add_argument("input", help="ไฟล์ CSV ต้นฉบับ (ใช้ - เพื่ออ่านจาก stdin)")
-    parser.add_argument("-o", "--output", help="ไฟล์ .vcf ที่จะสร้าง (ค่าเริ่มต้น: ชื่อเดียวกับไฟล์ CSV, ใช้ - เพื่อเขียนออก stdout)")
-    parser.add_argument("-e", "--encoding", default="auto", help="encoding ของไฟล์ CSV (ค่าเริ่มต้น: auto = UTF-8 แล้วลอง cp874)")
-    parser.add_argument("-d", "--delimiter", type=_delimiter_arg, help="ตัวคั่นคอลัมน์ (ค่าเริ่มต้น: ตรวจจับอัตโนมัติ)")
-    parser.add_argument("--country-code", type=_country_code_arg, help="แปลงเบอร์ที่ขึ้นต้นด้วย 0 เป็นรูปแบบสากล เช่น 66: 081... -> +66 81...")
-    parser.add_argument("--date-order", choices=("dmy", "mdy"), default="dmy", help="ลำดับวันที่ของวันเกิดแบบ xx/xx/yyyy (ค่าเริ่มต้น: dmy)")
-    parser.add_argument("--max-size", type=_max_size_arg, default=DEFAULT_MAX_MB, metavar="MB", help=f"ขนาดไฟล์ CSV สูงสุด (ค่าเริ่มต้น: {DEFAULT_MAX_MB} MB)")
-    parser.add_argument("-f", "--force", action="store_true", help="เขียนทับไฟล์ผลลัพธ์ถ้ามีอยู่แล้ว")
-    parser.add_argument("-q", "--quiet", action="store_true", help="ไม่แสดงคำเตือนรายแถว")
-    parser.add_argument("-V", "--version", action="version", version=f"%(prog)s {__version__}")
+    # กลุ่มที่สร้างเองแทนกลุ่มเริ่มต้น "positional arguments" / "options" ซึ่งเป็นภาษาอังกฤษ
+    required = parser.add_argument_group("อาร์กิวเมนต์ที่ต้องระบุ")
+    options = parser.add_argument_group("ตัวเลือก")
+    required.add_argument("input", metavar="ไฟล์_CSV", help="ไฟล์ CSV ต้นฉบับ (ใช้ - เพื่ออ่านจากอินพุตมาตรฐาน)")
+    options.add_argument("-h", "--help", action="help", help="แสดงข้อความช่วยเหลือนี้แล้วออก")
+    options.add_argument("-o", "--output", metavar="ไฟล์_VCF", help="ไฟล์ .vcf ที่จะสร้าง (ค่าเริ่มต้น: ชื่อเดียวกับไฟล์ CSV, ใช้ - เพื่อส่งออกทางเอาต์พุตมาตรฐาน)")
+    options.add_argument("-e", "--encoding", default="auto", metavar="การเข้ารหัส", help="การเข้ารหัสอักขระของไฟล์ CSV (ค่าเริ่มต้น: auto คือลอง UTF-8 ก่อน แล้วจึงลอง cp874)")
+    options.add_argument("-d", "--delimiter", type=_delimiter_arg, metavar="ตัวคั่น", help="ตัวคั่นคอลัมน์ เช่น , ; | หรือ tab (ค่าเริ่มต้น: ตรวจหาให้เอง)")
+    options.add_argument("--country-code", type=_country_code_arg, metavar="รหัสประเทศ", help="แปลงเบอร์ที่ขึ้นต้นด้วย 0 เป็นรูปแบบสากล เช่น 66: 081... -> +66 81...")
+    options.add_argument("--date-order", choices=("dmy", "mdy"), default="dmy", help="ลำดับวันที่ของวันเกิดแบบ xx/xx/yyyy: dmy คือ วัน/เดือน/ปี, mdy คือ เดือน/วัน/ปี (ค่าเริ่มต้น: dmy)")
+    options.add_argument("--max-size", type=_max_size_arg, default=DEFAULT_MAX_MB, metavar="เมกะไบต์", help=f"ขนาดไฟล์ CSV สูงสุด (ค่าเริ่มต้น: {DEFAULT_MAX_MB} เมกะไบต์)")
+    options.add_argument("-f", "--force", action="store_true", help="เขียนทับไฟล์ผลลัพธ์ถ้ามีอยู่แล้ว")
+    options.add_argument("-q", "--quiet", action="store_true", help="ไม่แสดงคำเตือนรายแถว")
+    options.add_argument("-V", "--version", action="version", version=f"%(prog)s รุ่น {__version__}", help="แสดงรุ่นของโปรแกรมแล้วออก")
     return parser
 
 
+# ข้อความจากระบบปฏิบัติการ (เป็นภาษาอังกฤษ) ที่พบบ่อย -> ภาษาไทย
+_OS_ERRORS: Dict[Optional[int], str] = {
+    errno.ENOENT: "ไม่พบไฟล์หรือโฟลเดอร์",
+    errno.EACCES: "ไม่มีสิทธิ์เข้าถึง",
+    errno.EPERM: "ไม่ได้รับอนุญาตให้ทำรายการนี้",
+    errno.EISDIR: "เป็นโฟลเดอร์ ไม่ใช่ไฟล์",
+    errno.ENOTDIR: "ส่วนหนึ่งของ path ไม่ใช่โฟลเดอร์",
+    errno.ENOSPC: "พื้นที่ดิสก์เต็ม",
+    errno.EROFS: "ระบบไฟล์เป็นแบบอ่านอย่างเดียว",
+    errno.ENAMETOOLONG: "ชื่อไฟล์ยาวเกินไป",
+}
+
+
 def main(argv: Optional[Sequence[str]] = None) -> int:
+    # ห้าม crash บน console ที่แสดงภาษาไทยไม่ได้ (เช่น cp437) ต้องตั้งก่อน parse_args
+    # เพราะ --help และข้อความ error ของอาร์กิวเมนต์ก็เป็นภาษาไทย
+    for stream in (sys.stdout, sys.stderr):
+        if hasattr(stream, "reconfigure"):
+            stream.reconfigure(errors="backslashreplace")
     args = build_parser().parse_args(argv)
-    if hasattr(sys.stderr, "reconfigure"):
-        # ห้าม crash บน console ที่แสดงภาษาไทยไม่ได้ (เช่น cp437)
-        sys.stderr.reconfigure(errors="backslashreplace")
 
     warning_count = 0
 
@@ -883,7 +944,8 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         return 1
     except OSError as exc:
         where = f" {show(str(exc.filename), PATH_SHOW_LIMIT)}" if exc.filename else ""
-        print(f"csv2vcf: ผิดพลาด:{where} {exc.strerror or exc}", file=sys.stderr)
+        reason = _OS_ERRORS.get(exc.errno) or exc.strerror or str(exc)
+        print(f"csv2vcf: ผิดพลาด:{where} {reason}", file=sys.stderr)
         return 1
 
     hidden = warning_count - MAX_WARNINGS_SHOWN
@@ -893,7 +955,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         names = ", ".join(show(name, 30) for name in stats.ignored_columns[:15])
         more = f" และอีก {len(stats.ignored_columns) - 15} คอลัมน์" if len(stats.ignored_columns) > 15 else ""
         print(f"หมายเหตุ: ไม่ได้ใช้คอลัมน์ {names}{more}", file=sys.stderr)
-    target = "stdout" if output == "-" else show(output, PATH_SHOW_LIMIT)
+    target = "เอาต์พุตมาตรฐาน" if output == "-" else show(output, PATH_SHOW_LIMIT)
     print(f"แปลงสำเร็จ {written} รายชื่อ -> {target} (ข้าม {stats.skipped} แถว)", file=sys.stderr)
     return 0
 

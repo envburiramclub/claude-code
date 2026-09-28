@@ -527,6 +527,7 @@ class CommandLineTest(unittest.TestCase):
         code, err = self.run_main(os.path.join(self.dir, "nope.csv"))
         self.assertEqual(code, 1)
         self.assertIn("nope.csv", err)
+        self.assertIn("ไม่พบไฟล์", err)
 
     def test_stdout_output(self):
         buffer = io.BytesIO()
@@ -545,6 +546,56 @@ class CommandLineTest(unittest.TestCase):
         self.assertEqual(code, 0)
         self.assertNotIn("\x1b", err)
         self.assertNotIn("\x07", err)
+
+    def test_help_is_thai(self):
+        out = io.StringIO()
+        with contextlib.redirect_stdout(out), self.assertRaises(SystemExit) as ctx:
+            csv2vcf.main(["--help"])
+        self.assertEqual(ctx.exception.code, 0)
+        text = out.getvalue()
+        for thai in ("วิธีใช้:", "อาร์กิวเมนต์ที่ต้องระบุ:", "ตัวเลือก:", "แสดงข้อความช่วยเหลือนี้แล้วออก",
+                     "แสดงรุ่นของโปรแกรมแล้วออก"):
+            self.assertIn(thai, text)
+        for english in ("usage:", "positional arguments", "options:", "optional arguments",
+                        "show this help", "show program"):
+            self.assertNotIn(english, text)
+
+    def test_version(self):
+        out = io.StringIO()
+        with contextlib.redirect_stdout(out), self.assertRaises(SystemExit):
+            csv2vcf.main(["--version"])
+        self.assertEqual(out.getvalue().strip(), "csv2vcf รุ่น " + csv2vcf.__version__)
+
+    def test_argument_errors_are_thai(self):
+        cases = {
+            (): "ต้องระบุ ไฟล์_CSV",
+            ("a.csv", "--date-order", "xyz"): "อาร์กิวเมนต์ --date-order: ค่าไม่ถูกต้อง 'xyz'",
+            ("a.csv", "--bogus"): "ไม่รู้จักอาร์กิวเมนต์ --bogus",
+            ("a.csv", "-o"): "อาร์กิวเมนต์ -o/--output: ต้องระบุค่าหนึ่งค่า",
+            ("a.csv", "--d", "x"): "ตัวเลือก --d กำกวม",
+            ("a.csv", "--force=1"): "อาร์กิวเมนต์ -f/--force: ตัวเลือกนี้ไม่รับค่า '1'",
+        }
+        for argv, expected in cases.items():
+            err = io.StringIO()
+            with contextlib.redirect_stderr(err), self.assertRaises(SystemExit) as ctx:
+                csv2vcf.main(list(argv))
+            self.assertEqual(ctx.exception.code, 2, argv)
+            self.assertIn("วิธีใช้:", err.getvalue(), argv)
+            self.assertIn("csv2vcf: ผิดพลาด: " + expected, err.getvalue(), argv)
+            self.assertNotIn("error:", err.getvalue(), argv)
+
+    def test_unknown_argparse_message_is_kept(self):
+        self.assertEqual(csv2vcf._translate_argparse_error("something new"), "something new")
+
+    def test_help_on_console_that_cannot_show_thai(self):
+        import subprocess
+
+        script = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "csv2vcf.py")
+        env = dict(os.environ, PYTHONIOENCODING="ascii")
+        for argv in (["--help"], ["--country-code", "x", "a.csv"]):
+            result = subprocess.run([sys.executable, script] + argv, env=env, capture_output=True)
+            self.assertNotIn(b"UnicodeEncodeError", result.stderr, argv)
+            self.assertIn(result.returncode, (0, 2), argv)
 
     def test_bad_arguments(self):
         for argv in (
