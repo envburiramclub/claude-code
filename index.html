@@ -7,7 +7,7 @@
   <!-- GitHub Pages ตั้ง header เองไม่ได้ จึงกำหนด CSP ที่นี่ หน้านี้ไม่มีสคริปต์เลย ใช้ได้แค่สไตล์และรูปจากเว็บนี้ -->
   <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'self'; img-src 'self'; base-uri 'none'; form-action 'none'">
   <meta name="referrer" content="no-referrer">
-  <meta name="description" content="รวมเครื่องมือที่ใช้งานผ่านเบราว์เซอร์ได้ทันที เช่น แปลงรายชื่อ CSV เป็น vCard สแกนเอกสารเป็น PDF สร้าง QR Code และแก้ไข PDF">
+  <meta name="description" content="รวมเครื่องมือที่ใช้งานผ่านเบราว์เซอร์ได้ทันที เช่น แปลงรายชื่อ CSV เป็น vCard สแกนเอกสารเป็น PDF สร้าง QR Code แก้ไข PDF และลบพื้นหลังรูปภาพ">
   <title>รวมเครื่องมือ</title>
   <link rel="icon" href="favicon.svg" type="image/svg+xml">
   <link rel="stylesheet" href="home.css">
@@ -72,6 +72,19 @@
             <span class="app-desc">เพิ่มข้อความภาษาไทย ลายเซ็น และรูปลงไฟล์ PDF จัดเรียง หมุน ลบ รวมหน้า ตั้งรหัสผ่าน
               แปลงเป็นรูป และสรุป/ถามตอบเนื้อหาด้วย AI (Gemini ใช้ API Key ของคุณ) แก้ไขในเบราว์เซอร์</span>
             <span class="app-folder">pdfedit/</span>
+          </span>
+        </a>
+      </li>
+      <li>
+        <a class="app" href="bg-remove/index.html">
+          <span class="app-icon cyan" aria-hidden="true">
+            <svg viewBox="0 0 24 24"><circle cx="12" cy="8.5" r="3.5"/><path d="M5.5 20c1-3.8 3.6-5.6 6.5-5.6s5.5 1.8 6.5 5.6"/><path d="M3 3h3M18 3h3M3 3v3M21 3v3M3 21h3M21 21h-3M3 21v-3M21 21v-3" stroke-dasharray="1.5 2"/></svg>
+          </span>
+          <span class="app-body">
+            <span class="app-name">ลบพื้นหลังรูปภาพ</span>
+            <span class="app-desc">AI แยกวัตถุออกจากพื้นหลังอัตโนมัติ รองรับ JPG PNG BMP WebP HEIC SVG ICO GIF TIFF
+              ปรับขอบ แก้ด้วยแปรง เปลี่ยนสีพื้นหลัง ดาวน์โหลด PNG โปร่งใส ประมวลผลในเครื่อง รูปไม่ถูกส่งขึ้นอินเทอร์เน็ต</span>
+            <span class="app-folder">bg-remove/</span>
           </span>
         </a>
       </li>
