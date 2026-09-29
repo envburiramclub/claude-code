@@ -37,7 +37,11 @@
 
   // Firefox บน Android (GeckoView): ช่องเลือกไฟล์ที่มี accept แบบไม่ใช่รูปภาพ (application/pdf, .pdf) ทำให้แอปล่ม
   // ก่อนหน้าเลือกไฟล์จะขึ้น — ช่องที่ไม่มี accept ใช้ได้ปกติ
-  var GECKO_ANDROID = /Android/i.test(navigator.userAgent || '') && /\bGecko\/\d/.test(navigator.userAgent || '');
+  // โหมด "เว็บไซต์เดสก์ท็อป" ของ Firefox บน Android ส่ง user agent เป็น Linux จึงดูจากจอสัมผัสด้วย
+  var UA = navigator.userAgent || '';
+  var ANDROID = /Android/i.test(UA) ||
+    (/Linux/i.test(UA) && typeof matchMedia === 'function' && matchMedia('(pointer: coarse)').matches);
+  var GECKO_ANDROID = ANDROID && /\bGecko\/\d/.test(UA);
 
   function isPdf(f) {
     if (!f) return false;
@@ -353,7 +357,7 @@
     // Android: หน้าเลือกไฟล์ของระบบกรองได้เฉพาะ MIME type (นามสกุล .pdf ใช้ไม่ได้) — Firefox บน Android ไม่กรองเลย
     // (ดู GECKO_ANDROID) ส่วนเบราว์เซอร์อื่นกรองด้วย application/pdf
     if (GECKO_ANDROID) $('pdfInput').removeAttribute('accept');
-    else if (/Android/i.test(navigator.userAgent || '')) $('pdfInput').setAttribute('accept', 'application/pdf');
+    else if (ANDROID) $('pdfInput').setAttribute('accept', 'application/pdf');
     $('btnPdfTools').addEventListener('click', pick);
     $('pdfPick').addEventListener('click', pick);
     $('pdfInput').addEventListener('change', function (e) {
@@ -405,6 +409,7 @@
   }
 
   window.PdfConvert = {
+    isAndroid: ANDROID, // ใช้ร่วมกับ js/app.js (ช่องเลือกรูปภาพ)
     open: open,
     isPdf: isPdf,
     isBusy: function () { return S.busy; }

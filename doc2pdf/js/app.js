@@ -1473,7 +1473,7 @@
   function bindHome() {
     // Android: หน้าเลือกไฟล์ของระบบกรองได้เฉพาะ MIME type — นามสกุลใน accept (.heic, .webp) ทำให้หน้าเลือกไฟล์
     // ของ Firefox บน Android ค้างแล้วปิดตัว (image/* ครอบคลุม HEIC/WebP บน Android อยู่แล้ว)
-    if (/Android/i.test(navigator.userAgent || '')) $('fileInput').setAttribute('accept', 'image/*');
+    if (window.PdfConvert && PdfConvert.isAndroid) $('fileInput').setAttribute('accept', 'image/*');
     $('btnPick').addEventListener('click', function () { $('fileInput').value = ''; $('fileInput').click(); });
     $('btnAddMore').addEventListener('click', function () { $('fileInput').value = ''; $('fileInput').click(); });
     $('btnNativeCamera').addEventListener('click', openNativeCamera);

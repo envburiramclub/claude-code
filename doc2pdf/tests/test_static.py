@@ -89,6 +89,9 @@ class NoThirdPartyTest(unittest.TestCase):
         convert = read("js", "pdf-convert.js")
         self.assertIn("if (GECKO_ANDROID) $('pdfInput').removeAttribute('accept');", convert)
         self.assertIn("if (!GECKO_ANDROID) PdfTools.preload();", convert)
+        # โหมด "เว็บไซต์เดสก์ท็อป" ของ Firefox บน Android ส่ง user agent เป็น Linux — ต้องดูจากจอสัมผัสด้วย
+        self.assertIn("matchMedia('(pointer: coarse)').matches", convert)
+        self.assertIn("if (window.PdfConvert && PdfConvert.isAndroid) $('fileInput').setAttribute('accept', 'image/*');", code)
 
     def test_scripts_contain_no_external_urls(self):
         folder = os.path.join(ROOT, "js")

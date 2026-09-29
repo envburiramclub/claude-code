@@ -368,8 +368,10 @@ class StaticFilesTest(unittest.TestCase):
         for name in ("app.js", os.path.join("web", "app.js")):
             with self.subTest(file=name):
                 code = self.read(name)
-                fix = code.index('if (/Android/i.test(navigator.userAgent)) input.removeAttribute("accept");')
+                fix = code.index('if (android) input.removeAttribute("accept");')
                 self.assertLess(fix, code.index("addEventListener"))
+                # โหมด "เว็บไซต์เดสก์ท็อป" บน Android ส่ง user agent เป็น Linux — ต้องดูจากจอสัมผัสด้วย
+                self.assertIn('window.matchMedia("(pointer: coarse)").matches', code[:fix])
         for name in ("index.html", os.path.join("web", "index.html")):
             with self.subTest(file=name):
                 # บนคอมพิวเตอร์ยังกรองด้วยนามสกุล (Windows/Mac รู้จักนามสกุลดีกว่า MIME type)
