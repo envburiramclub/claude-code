@@ -1,0 +1,1298 @@
+<!DOCTYPE html>
+<html lang="th">
+  <head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+		<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+		<meta name="mobile-web-app-capable" content="yes">
+		<meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <title>PDF Editors & AI Assistant</title>
+		<link type="image/x-icon" href="data:image/x-icon;base64,AAABAAEAEBAQAAEABAAoAQAAFgAAACgAAAAQAAAAIAAAAAEABAAAAAAAgAAAAAAAAAAAAAAAEAAAAAAAAAAAAAAAzP8AAAD//wD/AAAAAKX/AAAA/wAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABEREREREREAAAAAAAAAAABVUAMABEQCAFBVAwAABAIAUAUDAAAEAgBQBQMAAAQCAFVVAzMERAIAUAUDAAQAAgBQBQMABAACAFBVAwAEAAIAVVADMwREAgAAAAAAAAAAABEREREREREAAAAAAAAAAAAAAAAAAAAADAAwAAgAEAAP//AACNxQAApfUAALX1AAC19QAAhEUAALXdAAC13QAApd0AAIxFAAD//wAAgAEAAMADAADgBwAA" rel="icon">
+    <!-- ล็อกให้โหลดโค้ด/ฟอนต์/สไตล์ได้จากโดเมนตัวเองเท่านั้น เหลือทางออกเดียวคือ Gemini API -->
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self' data:; connect-src 'self' blob: data: https://generativelanguage.googleapis.com; worker-src 'self' blob:; child-src 'self' blob:; media-src 'self' blob:; object-src 'none'; base-uri 'self'; form-action 'self'">
+    <!-- ไลบรารีทั้งหมดเก็บไว้ในรีโปนี้ (/assets) ไม่มีการเรียก CDN ภายนอก -->
+    <link type="text/css" href="../assets/css/tailwind.pdfai.css" rel="stylesheet">
+    <link type="text/css" href="../assets/css/fonts-sarabun.css" rel="stylesheet">
+    <link type="text/css" href="../assets/css/toastify.css" rel="stylesheet">
+    <link type="text/css" href="../assets/css/fontawesome.min.css" rel="stylesheet">
+    <script type="text/javascript" src="../assets/js/sweetalert2.all.min.js"></script>
+    <script type="text/javascript" src="../assets/js/toastify.js"></script>
+    <script type="text/javascript" src="../assets/js/pdf-lib.min.js"></script>
+    <script type="text/javascript" src="../assets/js/fontkit.umd.min.js"></script>
+    <script type="text/javascript" src="../assets/js/jszip.min.js"></script>
+    <script type="module">
+      // pdf.js v4 ขึ้นไปเผยแพร่เป็น ES module เท่านั้น จึงต้อง import แล้วผูกเป็น global
+      // โมดูลจะทำงานเสร็จก่อน DOMContentLoaded/window.onload เสมอ โค้ดส่วนอื่นจึงเรียก pdfjsLib ได้ตามปกติ
+      import * as pdfjsLib from '../assets/js/pdf.min.mjs';
+      pdfjsLib.GlobalWorkerOptions.workerSrc = '../assets/js/pdf.worker.min.mjs';
+      window.pdfjsLib = pdfjsLib;
+    </script>
+    <style>
+      :root {
+        --theme-primary: #4f46e5;
+        --theme-primary-hover: #4338ca;
+        --theme-primary-light: #eef2ff;
+        --theme-primary-shadow: rgba(79, 70, 229, 0.3);
+      }
+      ::-webkit-scrollbar { width: 6px; height: 6px; }
+      ::-webkit-scrollbar-track { background: #f1f5f9; }
+      ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 4px; }
+      .pdf-element {
+        position: absolute; user-select: none; cursor: grab;
+        box-sizing: border-box; transform-origin: top left; touch-action: none;
+      }
+      .pdf-element:active { cursor: grabbing; }
+      .pdf-element.selected { outline: 2px dashed var(--theme-primary); outline-offset: 2px; z-index: 50; }
+      .resize-handle {
+        position: absolute; bottom: -10px; right: -10px; width: 24px; height: 24px;
+        background-color: var(--theme-primary); border: 2px solid white; border-radius: 50%;
+        cursor: se-resize; z-index: 51; box-shadow: 0 2px 4px rgba(0, 0, 0, 0.3); touch-action: none;
+      }
+      .action-btn {
+        position: absolute; top: -15px; width: 30px; height: 30px; color: white; border-radius: 50%;
+        display: flex; align-items: center; justify-content: center; font-size: 14px;
+        cursor: pointer; z-index: 51; box-shadow: 0 2px 4px rgba(0, 0, 0, 0.3); transition: transform 0.1s;
+      }
+      .action-btn:active { transform: scale(0.9); }
+      .delete-btn { right: -15px; background-color: #ef4444; }
+      .edit-btn { right: 20px; background-color: #3b82f6; }
+      #sig-canvas { width: 100%; height: 200px; touch-action: none; background-color: #fff; cursor: crosshair; }
+      .swal2-html-container { overflow: hidden !important; }
+      .page-item.over { border-color: #4f46e5; border-style: dashed; }
+      .page-item.dragging { opacity: 0.4; }
+      .ai-response b { color: #4f46e5; font-weight: 600; }
+      .ai-response ul { list-style-type: disc; margin-left: 20px; margin-top: 8px; margin-bottom: 8px; }
+      .ai-response li { margin-bottom: 4px; }
+      #settings-modal {
+        display: none; position: fixed; inset: 0; background: rgba(0, 0, 0, 0.5); z-index: 200;
+        align-items: center; justify-content: center;
+      }
+      #settings-modal.open { display: flex; }
+      .settings-box {
+        background: #1e293b; border-radius: 16px; padding: 28px; width: 90%; max-width: 420px;
+        box-shadow: 0 25px 60px rgba(0, 0, 0, 0.5); color: white;
+      }
+      .settings-label {
+        font-size: 12px; color: #94a3b8; font-weight: 600; letter-spacing: 0.05em;
+        text-transform: uppercase; margin-bottom: 6px; display: block;
+      }
+      .settings-input {
+        width: 100%; background: #0f172a; border: 1px solid #334155; border-radius: 8px;
+        padding: 10px 14px; color: white; font-size: 14px; outline: none; transition: border-color 0.2s;
+      }
+      .settings-input:focus { border-color: var(--theme-primary); }
+      .sidebar-footer {
+        padding: 14px 16px; border-top: 1px solid #1e293b; background: #0f172a;
+        text-align: center; font-size: 12px; color: #64748b; flex-shrink: 0;
+      }
+      .sidebar-footer a { color: #818cf8; text-decoration: none; font-weight: 600; }
+      .sidebar-footer a:hover { color: #a5b4fc; text-decoration: underline; }
+      .color-swatch {
+        width: 32px; height: 32px; border-radius: 50%; cursor: pointer; border: 3px solid transparent; transition: border-color 0.2s, transform 0.15s;
+      }
+      .color-swatch:hover, .color-swatch.active { border-color: white; transform: scale(1.15); }
+    </style>
+  </head>
+  <body class="bg-gray-50 h-screen flex overflow-hidden font-sans text-gray-800">
+    <div id="sidebar-backdrop" class="fixed inset-0 bg-black/50 z-30 hidden md:hidden transition-opacity" onclick="toggleSidebar()"></div>
+    <aside id="sidebar" class="fixed md:relative inset-y-0 left-0 transform -translate-x-full md:translate-x-0 w-72 bg-slate-900 text-white flex flex-col shadow-2xl z-40 transition-transform duration-300 ease-in-out">
+      <div class="p-5 border-b border-slate-800 flex items-center justify-between md:justify-start space-x-3">
+        <div class="flex items-center space-x-3">
+          <div class="w-10 h-10 bg-gradient-to-br from-indigo-500 to-purple-600 rounded-lg flex items-center justify-center shadow-lg">
+            <i class="fa-solid fa-file-signature text-xl"></i>
+          </div>
+          <h1 class="text-xl font-bold tracking-tight">PDF <span class="text-purple-400">Editors + AI</span></h1>
+        </div>
+        <button onclick="toggleSidebar()" class="md:hidden text-gray-400 hover:text-white p-2">
+          <i class="fa-solid fa-xmark text-xl"></i>
+        </button>
+      </div>
+      <div class="flex-1 overflow-y-auto p-4 space-y-6">
+        <div>
+          <h2 class="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-3">จัดการไฟล์หลัก</h2>
+          <div class="space-y-2">
+            <button onclick="document.getElementById('file-upload').click()" class="w-full flex items-center space-x-3 bg-indigo-600 hover:bg-indigo-500 text-white px-4 py-3 rounded-lg transition shadow-md">
+              <i class="fa-solid fa-folder-open w-5 text-center"></i>
+              <span class="font-medium">เปิดไฟล์ PDF ใหม่</span>
+            </button>
+            <input type="file" id="file-upload" class="hidden" accept="application/pdf" onchange="handleFileUpload(event)">
+            <button id="btn-merge" onclick="document.getElementById('merge-upload').click()" class="w-full flex items-center space-x-3 bg-slate-800 hover:bg-slate-700 text-slate-200 px-4 py-2.5 rounded-lg transition border border-slate-700 opacity-50 pointer-events-none">
+              <i class="fa-solid fa-file-circle-plus w-5 text-indigo-400 text-center"></i>
+              <span class="text-sm">รวมไฟล์ (Merge PDF)</span>
+            </button>
+            <input type="file" id="merge-upload" class="hidden" accept="application/pdf" onchange="handleMergeUpload(event)">
+          </div>
+        </div>
+        <div id="ai-tools" class="opacity-50 pointer-events-none transition-opacity duration-300">
+          <h2 class="text-xs font-semibold text-transparent bg-clip-text bg-gradient-to-r from-purple-400 to-pink-400 uppercase tracking-wider mb-3">
+            <i class="fa-solid fa-wand-magic-sparkles text-purple-400"></i> AI Assistant
+          </h2>
+          <div class="space-y-2">
+            <button onclick="summarizePDF(); autoCloseSidebar();" class="w-full flex items-center space-x-3 bg-slate-800 hover:bg-slate-700 text-slate-200 px-4 py-2.5 rounded-lg transition border border-purple-500/30">
+              <i class="fa-solid fa-file-lines w-5 text-purple-400 text-center"></i>
+              <span class="text-sm">สรุปเนื้อหา PDF</span>
+            </button>
+            <button onclick="chatWithPDF(); autoCloseSidebar();" class="w-full flex items-center space-x-3 bg-slate-800 hover:bg-slate-700 text-slate-200 px-4 py-2.5 rounded-lg transition border border-pink-500/30">
+              <i class="fa-solid fa-comments w-5 text-pink-400 text-center"></i>
+              <span class="text-sm">ถาม-ตอบจาก PDF</span>
+            </button>
+          </div>
+        </div>
+        <div id="edit-tools" class="opacity-50 pointer-events-none transition-opacity duration-300">
+          <h2 class="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-3">เพิ่มองค์ประกอบ</h2>
+          <div class="space-y-2">
+            <button onclick="openTextEditor(); autoCloseSidebar();" class="w-full flex items-center space-x-3 bg-slate-800 hover:bg-slate-700 text-slate-200 px-4 py-2.5 rounded-lg transition border border-slate-700">
+              <i class="fa-solid fa-t w-5 text-blue-400 text-center"></i>
+              <span class="text-sm">ข้อความ (Text)</span>
+            </button>
+            <button onclick="openDrawSignature(); autoCloseSidebar();" class="w-full flex items-center space-x-3 bg-slate-800 hover:bg-slate-700 text-slate-200 px-4 py-2.5 rounded-lg transition border border-slate-700">
+              <i class="fa-solid fa-signature w-5 text-blue-400 text-center"></i>
+              <span class="text-sm">วาดลายเซ็น</span>
+            </button>
+            <button onclick="document.getElementById('sig-upload').click();" class="w-full flex items-center space-x-3 bg-slate-800 hover:bg-slate-700 text-slate-200 px-4 py-2.5 rounded-lg transition border border-slate-700">
+              <i class="fa-solid fa-image w-5 text-blue-400 text-center"></i>
+              <span class="text-sm">อัปโหลดรูปภาพ</span>
+            </button>
+            <input type="file" id="sig-upload" class="hidden" accept="image/png, image/jpeg" onchange="handleImageUpload(event)">
+          </div>
+        </div>
+        <div id="page-tools" class="opacity-50 pointer-events-none transition-opacity duration-300">
+          <h2 class="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-3">จัดการหน้ากระดาษ</h2>
+          <div class="space-y-2">
+            <button onclick="openReorderModal(); autoCloseSidebar();" class="w-full flex items-center space-x-3 bg-slate-800 hover:bg-slate-700 text-slate-200 px-4 py-2.5 rounded-lg transition border border-slate-700">
+              <i class="fa-solid fa-arrow-down-up-across-line w-5 text-cyan-400 text-center"></i>
+              <span class="text-sm">จัดเรียงหน้า (Reorder)</span>
+            </button>
+            <button onclick="rotateCurrentPage()" class="w-full flex items-center space-x-3 bg-slate-800 hover:bg-slate-700 text-slate-200 px-4 py-2.5 rounded-lg transition border border-slate-700">
+              <i class="fa-solid fa-rotate-right w-5 text-amber-400 text-center"></i>
+              <span class="text-sm">หมุนกระดาษ 90°</span>
+            </button>
+            <button onclick="deleteCurrentPage()" class="w-full flex items-center space-x-3 bg-slate-800 hover:bg-slate-700 text-slate-200 px-4 py-2.5 rounded-lg transition border border-slate-700">
+              <i class="fa-solid fa-file-excel w-5 text-red-400 text-center"></i>
+              <span class="text-sm">ลบหน้านี้ (Delete)</span>
+            </button>
+          </div>
+        </div>
+        <div id="util-tools" class="opacity-50 pointer-events-none transition-opacity duration-300">
+          <h2 class="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-3">เครื่องมือเสริม</h2>
+          <div class="space-y-2">
+            <button onclick="setPassword()" class="w-full flex items-center space-x-3 bg-slate-800 hover:bg-slate-700 text-slate-200 px-4 py-2.5 rounded-lg transition border border-slate-700">
+              <i class="fa-solid fa-shield-halved w-5 text-emerald-400 text-center"></i>
+              <span class="text-sm" id="btn-text-password">ตั้งรหัสผ่าน (Protect)</span>
+            </button>
+            <button onclick="unlockPDF()" class="w-full flex items-center space-x-3 bg-slate-800 hover:bg-slate-700 text-slate-200 px-4 py-2.5 rounded-lg transition border border-slate-700">
+              <i class="fa-solid fa-layer-group w-5 text-purple-400 text-center"></i>
+              <span class="text-sm">รวมเลเยอร์เป็นรูป (Flatten)</span>
+            </button>
+            <button onclick="pdfToImages()" class="w-full flex items-center space-x-3 bg-slate-800 hover:bg-slate-700 text-slate-200 px-4 py-2.5 rounded-lg transition border border-slate-700">
+              <i class="fa-solid fa-file-zipper w-5 text-yellow-400 text-center"></i>
+              <span class="text-sm">แปลงเป็นรูปภาพ (ZIP)</span>
+            </button>
+          </div>
+        </div>
+        <div class="pt-2 border-t border-slate-800">
+          <button onclick="openSettings()" class="w-full flex items-center space-x-3 bg-slate-800 hover:bg-slate-700 text-slate-200 px-4 py-2.5 rounded-lg transition border border-slate-600">
+            <i class="fa-solid fa-gear w-5 text-slate-400 text-center"></i>
+            <span class="text-sm">ตั้งค่า (API Key & ธีม)</span>
+          </button>
+        </div>
+      </div>
+    </aside>
+    <div id="settings-modal" onclick="if(event.target===this)closeSettings()">
+      <div class="settings-box">
+        <div class="flex items-center justify-between mb-6">
+          <h2 class="text-lg font-bold flex items-center gap-2"><i class="fa-solid fa-gear text-indigo-400"></i> ตั้งค่าระบบ</h2>
+          <button onclick="closeSettings()" class="text-slate-400 hover:text-white text-xl leading-none">&times;</button>
+        </div>
+        <div class="mb-5">
+          <label class="settings-label"><i class="fa-solid fa-key mr-1"></i> Gemini API Key</label>
+          <div class="flex gap-2">
+            <input type="password" id="settings-apikey" class="settings-input" placeholder="AIzaSy..." autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false">
+            <button onclick="toggleApiKeyVisibility()" class="px-3 py-2 bg-slate-700 rounded-lg text-slate-300 hover:bg-slate-600 transition text-sm"><i id="eye-icon" class="fa-solid fa-eye"></i></button>
+          </div>
+          <p class="text-xs text-slate-500 mt-2">ใช้สำหรับฟีเจอร์ AI (สรุป PDF / ถาม-ตอบ) &mdash; <a href="https://aistudio.google.com/app/apikey" target="_blank" rel="noopener noreferrer" class="text-indigo-400 hover:underline">รับ API Key ฟรี</a></p>
+        </div>
+        <div class="mb-6">
+          <label class="settings-label"><i class="fa-solid fa-palette mr-1"></i> โทนสีหลัก</label>
+          <div class="flex gap-3 flex-wrap mt-2" id="color-swatches">
+            <div class="color-swatch" style="background:#4f46e5" data-color="#4f46e5" title="Indigo" onclick="selectTheme(this)"></div>
+            <div class="color-swatch" style="background:#0ea5e9" data-color="#0ea5e9" title="Sky Blue" onclick="selectTheme(this)"></div>
+            <div class="color-swatch" style="background:#10b981" data-color="#10b981" title="Emerald" onclick="selectTheme(this)"></div>
+            <div class="color-swatch" style="background:#f59e0b" data-color="#f59e0b" title="Amber" onclick="selectTheme(this)"></div>
+            <div class="color-swatch" style="background:#ef4444" data-color="#ef4444" title="Red" onclick="selectTheme(this)"></div>
+            <div class="color-swatch" style="background:#ec4899" data-color="#ec4899" title="Pink" onclick="selectTheme(this)"></div>
+            <div class="color-swatch" style="background:#8b5cf6" data-color="#8b5cf6" title="Violet" onclick="selectTheme(this)"></div>
+            <div class="color-swatch" style="background:#06b6d4" data-color="#06b6d4" title="Cyan" onclick="selectTheme(this)"></div>
+          </div>
+          <div class="flex items-center gap-2 mt-3">
+            <label class="settings-label mb-0">กำหนดเอง:</label>
+            <input type="color" id="custom-color-picker" class="w-10 h-10 rounded cursor-pointer border-0 bg-transparent" title="เลือกสีเอง" oninput="applyTheme(this.value, null)">
+          </div>
+        </div>
+        <button onclick="saveSettings()" class="w-full py-3 rounded-xl font-semibold text-white transition shadow-lg" style="background:var(--theme-primary)">
+          <i class="fa-solid fa-floppy-disk mr-2"></i>บันทึกการตั้งค่า
+        </button>
+      </div>
+    </div>
+    <main class="flex-1 flex flex-col relative h-full bg-slate-50 w-full">
+      <header class="h-16 bg-white border-b border-gray-200 shadow-sm flex items-center justify-between px-4 md:px-6 z-10 shrink-0">
+        <button onclick="toggleSidebar()" class="md:hidden mr-2 p-2 rounded-md text-gray-600 hover:bg-gray-100 focus:outline-none">
+          <i class="fa-solid fa-bars text-xl"></i>
+        </button>
+        <div id="pagination-controls" class="flex items-center space-x-2 md:space-x-4 opacity-0 transition-opacity duration-300 flex-1 justify-center md:justify-start">
+          <button onclick="changePage(-1)" class="w-8 h-8 flex items-center justify-center rounded-full hover:bg-gray-100 text-gray-600 transition">
+            <i class="fa-solid fa-chevron-left"></i>
+          </button>
+          <div class="text-xs md:text-sm font-medium text-gray-600 flex items-center">
+            หน้า <input type="number" id="page-input"
+                class="w-10 md:w-12 text-center border border-gray-300 rounded mx-1 md:mx-2 py-1 focus:outline-none focus:border-indigo-500"
+                value="1" min="1" onchange="goToPage(this.value)"> / <span id="page-total" class="ml-1">1</span>
+          </div>
+          <button onclick="changePage(1)" class="w-8 h-8 flex items-center justify-center rounded-full hover:bg-gray-100 text-gray-600 transition">
+            <i class="fa-solid fa-chevron-right"></i>
+          </button>
+        </div>
+        <div id="action-controls" class="flex items-center space-x-2 opacity-0 transition-opacity duration-300">
+          <button onclick="clearCurrentPage()" class="p-2 md:px-4 md:py-2 text-sm font-medium text-red-600 bg-red-50 hover:bg-red-100 rounded-lg transition duration-200 flex items-center" title="ล้างการแก้ไขในหน้านี้">
+            <i class="fa-solid fa-eraser md:mr-2"></i>
+            <span class="hidden md:inline">ล้างหน้า</span>
+          </button>
+          <button onclick="exportPDF()" class="p-2 md:px-6 md:py-2 text-sm font-bold text-white bg-indigo-600 hover:bg-indigo-700 rounded-lg transition duration-200 shadow-lg shadow-indigo-600/30 flex items-center">
+            <i class="fa-solid fa-download md:mr-2"></i>
+            <span class="hidden md:inline">ส่งออก PDF</span>
+          </button>
+        </div>
+      </header>
+      <div id="workspace-container" class="flex-1 overflow-auto bg-slate-200 relative p-4 md:p-8 flex justify-center items-start shadow-inner">
+        <div id="empty-state" class="absolute inset-4 md:inset-10 border-2 border-dashed border-gray-400 rounded-3xl bg-white flex flex-col items-center justify-center text-gray-400 transition-all text-center p-6 shadow-sm">
+          <div class="w-20 h-20 md:w-24 md:h-24 mb-4 md:mb-6 bg-gradient-to-br from-indigo-100 to-purple-100 rounded-full flex items-center justify-center text-indigo-500">
+            <i class="fa-solid fa-file-arrow-up text-3xl md:text-4xl"></i>
+          </div>
+          <h3 class="text-lg md:text-xl font-bold text-slate-700 mb-2">เริ่มต้นใช้งาน PDF Pro + AI</h3>
+          <p class="mb-6 text-sm md:text-base text-slate-500">แตะเปิดไฟล์ หรือลากไฟล์ PDF มาวางที่นี่เพื่อเริ่มต้น</p>
+          <button onclick="document.getElementById('file-upload').click()" class="bg-indigo-600 hover:bg-indigo-700 text-white px-8 py-3 rounded-xl font-semibold transition shadow-lg shadow-indigo-600/30">
+            เปิดไฟล์ PDF
+          </button>
+        </div>
+        <div id="canvas-wrapper" class="relative hidden shadow-2xl transition-transform transform origin-top mb-12 bg-white ring-1 ring-gray-900/5">
+          <canvas id="pdf-canvas" class="block"></canvas>
+          <div id="pdf-overlay" class="absolute top-0 left-0 w-full h-full overflow-hidden"></div>
+        </div>
+      </div>
+    </main>
+     <script type="text/javascript" >
+      function getApiKey() {
+        return localStorage.getItem('pdf_toolkit_apikey') || '';
+      }
+      function loadSettings() {
+        State.settings.apiKey = localStorage.getItem('pdf_toolkit_apikey') || '';
+        // เดิมบันทึก pdf_toolkit_theme ลง localStorage แต่ไม่เคยอ่านกลับ ธีมจึงรีเซ็ตทุกครั้งที่เปิดหน้า
+        let savedTheme = localStorage.getItem('pdf_toolkit_theme') || '';
+        State.settings.themeColor = /^#[0-9a-f]{6}$/i.test(savedTheme) ? savedTheme : '#4f46e5';
+        applyTheme(State.settings.themeColor, null);
+      }
+      async function callGemini(prompt, systemInstruction) {
+        if (!systemInstruction) { systemInstruction = "คุณคือผู้ช่วย AI สรุปและตอบคำถามจากไฟล์ PDF ตอบเป็นภาษาไทยเสมอ"; }
+        let apiKey = getApiKey();
+        if (!apiKey) {
+          await Swal.fire('ยังไม่มี API Key', 'กรุณาไปที่ ตั้งค่า แล้วกรอก Gemini API Key ก่อนใช้งานฟีเจอร์ AI', 'warning');
+          openSettings();
+          return null;
+        }
+        // ส่ง API key ทาง header ไม่ใช่ query string: URL หลุดไปอยู่ใน Referer,
+        // ประวัติเบราว์เซอร์, log ของ proxy และข้อความ error ได้
+        let url = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-flash-latest:generateContent';
+        let payload = {
+          contents: [{ parts: [{ text: prompt }] }],
+          systemInstruction: { parts: [{ text: systemInstruction }] }
+        };
+        let delays = [1000, 2000, 4000, 8000, 16000];
+        for (let i = 0; i < 5; i++) {
+          try {
+            let response = await fetch(url, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json', 'x-goog-api-key': apiKey },
+              body: JSON.stringify(payload)
+            });
+            if (!response.ok) {
+              let errData = await response.json().catch(function () { return {}; });
+              let msg = 'HTTP ' + response.status;
+              if (errData && errData.error && errData.error.message) { msg = errData.error.message; }
+              let httpErr = new Error(msg);
+              httpErr.status = response.status;
+              throw httpErr;
+            }
+            let result = await response.json();
+            let answer = "ไม่สามารถสร้างคำตอบได้";
+            if (result && result.candidates && result.candidates.length > 0 && 
+                result.candidates[0].content && result.candidates[0].content.parts && 
+                result.candidates[0].content.parts.length > 0) {
+              answer = result.candidates[0].content.parts[0].text;
+            }
+            return answer;
+          } catch (e) {
+            // ลองใหม่เฉพาะกรณีที่ลองแล้วมีโอกาสสำเร็จ: เน็ตหลุด, โดน rate limit, ฝั่ง server พัง
+            // ถ้าเป็น 4xx อื่น (เช่น API key ผิด) ตอบกลับทันที ไม่ต้องให้ผู้ใช้รอ 31 วินาที
+            let retryable = !e.status || e.status === 429 || e.status >= 500;
+            if (i === 4 || !retryable) {
+              console.error("Gemini API Error:", e);
+              return "ขออภัย เกิดข้อผิดพลาด: " + e.message;
+            }
+            await new Promise(function (res) { setTimeout(res, delays[i]); });
+          }
+        }
+      }
+      let State = {
+        pdfDoc: null,
+        pdfBytes: null,
+        fileName: 'document.pdf',
+        currentPage: 1,
+        totalPages: 0,
+        scale: 1.0,
+        edits: {},
+        selectedElementId: null,
+        password: null,
+        thaiFontBytes: null,
+        settings: { apiKey: '', themeColor: '#4f46e5' }
+      };
+      function showToast(text, type) {
+        if (!type) { type = 'success'; }
+        Toastify({
+          text: text, duration: 3000, close: true, gravity: "bottom", position: "center",
+          style: { background: type === 'success' ? "#10b981" : (type === 'error' ? "#ef4444" : "#3b82f6"), borderRadius: "8px", boxShadow: "0 4px 6px -1px rgba(0,0,0,0.1)" }
+        }).showToast();
+      }
+      function toggleSidebar() {
+        document.getElementById('sidebar').classList.toggle('-translate-x-full');
+        document.getElementById('sidebar-backdrop').classList.toggle('hidden');
+      }
+      function autoCloseSidebar() {
+        if (window.innerWidth < 768) { toggleSidebar(); }
+      }
+      async function extractTextFromPDF() {
+        if (!State.pdfDoc) { return ""; }
+        let fullText = "";
+        let maxPages = Math.min(State.pdfDoc.numPages, 10);
+        for (let i = 1; i <= maxPages; i++) {
+          let page = await State.pdfDoc.getPage(i);
+          let textContent = await page.getTextContent();
+          let pageText = textContent.items.map(function (item) { return item.str; }).join(" ");
+          fullText += "--- หน้าที่ " + i + " ---\n" + pageText + "\n\n";
+        }
+        return fullText;
+      }
+      // ข้อความจาก PDF / จากผู้ใช้ / จากโมเดล ล้วนเป็นข้อมูลที่เชื่อไม่ได้
+      // ทุกจุดที่เอาไปต่อเป็น HTML ต้อง escape ก่อนเสมอ
+      function escapeHtml(value) {
+        return String(value === null || value === undefined ? '' : value)
+          .replace(/&/g, '&amp;')
+          .replace(/</g, '&lt;')
+          .replace(/>/g, '&gt;')
+          .replace(/"/g, '&quot;')
+          .replace(/'/g, '&#39;');
+      }
+      function formatAIResponse(text) {
+        // escape ก่อน แล้วค่อยแปลง markdown เป็นแท็ก เพื่อไม่ให้ HTML จากโมเดลรันได้
+        return escapeHtml(text)
+          .replace(/\*\*(.*?)\*\*/g, '<b>$1</b>')
+          .replace(/\*(.*?)\*/g, '<i>$1</i>')
+          .replace(/\n\*/g, '<br>•')
+          .replace(/\n/g, '<br>');
+      }
+      async function summarizePDF() {
+        if (!State.pdfDoc) { return; }
+        Swal.fire({ title: 'AI กำลังอ่านข้อมูล...', html: 'กำลังดึงข้อความและสรุปใจความสำคัญ<br><small class="text-gray-500">(ประมวลผลสูงสุด 10 หน้าแรก)</small>', allowOutsideClick: false, didOpen: function () { Swal.showLoading(); } });
+        let text = await extractTextFromPDF();
+        if (!text.trim()) { return Swal.fire('ข้อผิดพลาด', 'ไม่พบตัวหนังสือใน PDF นี้ (อาจเป็นไฟล์รูปภาพที่ได้จากการแสกน)', 'error'); }
+        let prompt = "นี่คือเนื้อหาจากเอกสาร PDF:\n\n" + text + "\n\nคำสั่ง: กรุณาสรุปประเด็นสำคัญทั้งหมดจากเอกสารนี้ ให้กระชับ อ่านเข้าใจง่าย และเป็นภาษาไทย";
+        let summary = await callGemini(prompt);
+        if (!summary) { return; }
+        Swal.fire({
+          title: '<i class="fa-solid fa-wand-magic-sparkles text-purple-500"></i> สรุปเนื้อหาโดย AI',
+          html: '<div class="ai-response text-left text-sm max-h-[60vh] overflow-y-auto p-4 bg-purple-50 rounded-lg border border-purple-100">' + formatAIResponse(summary) + '</div>',
+          width: 600,
+          confirmButtonText: 'ปิดหน้าต่าง'
+        });
+      }
+      async function chatWithPDF() {
+        if (!State.pdfDoc) { return; }
+        Swal.fire({ title: 'กำลังเตรียมข้อมูลสำหรับ AI...', allowOutsideClick: false, didOpen: function () { Swal.showLoading(); } });
+        let pdfText = await extractTextFromPDF();
+        if (!pdfText.trim()) { return Swal.fire('ข้อผิดพลาด', 'ไม่พบตัวหนังสือใน PDF นี้', 'error'); }
+        Swal.close();
+        let askQuestion = async function (previousChat) {
+          if (!previousChat) { previousChat = ''; }
+          let swalRes = await Swal.fire({
+            title: '💬 ถามคำถามจากเอกสาร',
+            html: previousChat + '<p class="text-sm text-gray-500 mb-2 mt-4 text-left">พิมพ์คำถามที่คุณอยากรู้จากเอกสารนี้:</p>',
+            input: 'textarea',
+            inputPlaceholder: 'ตัวอย่าง: เอกสารนี้พูดถึงเรื่องอะไรเป็นหลัก? หรือ สัญญาฉบับนี้มีอายุกี่ปี?',
+            showCancelButton: true,
+            confirmButtonText: '<i class="fa-solid fa-paper-plane"></i> ส่งคำถาม',
+            cancelButtonText: 'ปิด',
+            customClass: { input: 'text-sm' },
+            inputValidator: function (value) { if (!value) { return 'กรุณาพิมพ์คำถามก่อนส่ง!'; } }
+          });
+          let question = swalRes.value;
+          if (question) {
+            Swal.fire({ title: 'AI กำลังคิดคำตอบ...', allowOutsideClick: false, didOpen: function () { Swal.showLoading(); } });
+            let prompt = "ข้อมูลเอกสาร (ใช้อ้างอิงเพื่อตอบคำถาม):\n" + pdfText + "\n\nคำถาม: " + question + "\n\nคำสั่ง: จงตอบคำถามโดยค้นหาคำตอบจาก 'ข้อมูลเอกสาร' ด้านบนเท่านั้น อธิบายให้ชัดเจนและเป็นภาษาไทย";
+            let answer = await callGemini(prompt);
+            if (!answer) { return; }
+            let newChat = '<div class="text-left text-sm mb-4 border-b pb-4">' +
+              '<div class="flex items-start gap-2 mb-2">' +
+                '<div class="bg-gray-200 text-gray-700 px-2 py-1 rounded font-bold text-xs mt-0.5">คุณ</div>' +
+                '<div class="font-medium text-gray-800">' + escapeHtml(question) + '</div>' +
+              '</div>' +
+              '<div class="flex items-start gap-2">' +
+                '<div class="bg-pink-100 text-pink-700 px-2 py-1 rounded font-bold text-xs mt-0.5"><i class="fa-solid fa-robot"></i></div>' +
+                '<div class="ai-response text-gray-700 bg-gray-50 p-3 rounded-lg border border-gray-100 w-full">' + formatAIResponse(answer) + '</div>' +
+              '</div>' +
+            '</div>';
+            askQuestion(previousChat + newChat);
+          }
+        };
+        askQuestion();
+      }
+      function handleFileUpload(e) {
+        if (e.target.files && e.target.files.length > 0) {
+          let file = e.target.files[0];
+          if (file.type !== 'application/pdf') {
+            showToast('กรุณาอัปโหลดไฟล์ PDF เท่านั้น', 'error');
+            e.target.value = '';
+            return;
+          }
+          processFile(file);
+          autoCloseSidebar();
+        }
+      }
+      function processFile(file) {
+        Swal.fire({ title: 'กำลังโหลด PDF...', allowOutsideClick: false, didOpen: function () { Swal.showLoading(); } });
+        let reader = new FileReader();
+        reader.onload = async function (event) {
+          try {
+            State.fileName = file.name;
+            let arrayBuffer = event.target.result;
+            State.pdfBytes = new Uint8Array(arrayBuffer);
+            State.edits = {};
+            // รหัสผ่านที่ตั้งไว้ผูกกับไฟล์เดิม ถ้าไม่รีเซ็ตตรงนี้ ไฟล์ใหม่ที่โหลดเข้ามา
+            // จะถูกเข้ารหัสด้วยรหัสผ่านเก่าแบบเงียบ ๆ ตอนส่งออกโดยผู้ใช้ไม่รู้ตัว
+            State.password = null;
+            let pwBtn = document.getElementById('btn-text-password');
+            if (pwBtn) { pwBtn.innerText = 'ตั้งรหัสผ่าน (Protect)'; pwBtn.className = 'text-sm'; }
+            await loadPDFToViewer();
+            document.getElementById('empty-state').classList.add('hidden');
+            document.getElementById('canvas-wrapper').classList.remove('hidden');
+            let toolPanels = ['edit-tools', 'page-tools', 'util-tools', 'ai-tools'];
+            toolPanels.forEach(function (id) { document.getElementById(id).classList.remove('opacity-50', 'pointer-events-none'); });
+            document.getElementById('btn-merge').classList.remove('opacity-50', 'pointer-events-none');
+            document.getElementById('pagination-controls').classList.remove('opacity-0');
+            document.getElementById('action-controls').classList.remove('opacity-0');
+            Swal.close();
+            showToast('โหลด PDF สำเร็จ!');
+          } catch (error) {
+            console.error(error);
+            Swal.fire('ข้อผิดพลาด', 'ไฟล์อาจมีการเข้ารหัส หรือเกิดข้อผิดพลาดในการอ่านไฟล์', 'error');
+          }
+        };
+        reader.onerror = function () {
+          Swal.fire('ข้อผิดพลาด', 'ไม่สามารถอ่านไฟล์ได้', 'error');
+        };
+        reader.readAsArrayBuffer(file);
+      }
+      async function loadPDFToViewer() {
+        let previousDoc = State.pdfDoc;
+        let dataToPass = new Uint8Array(State.pdfBytes);
+        let loadingTask = pdfjsLib.getDocument({ data: dataToPass, isEvalSupported: false });
+        State.pdfDoc = await loadingTask.promise;
+        State.totalPages = State.pdfDoc.numPages;
+        if (State.currentPage > State.totalPages) { State.currentPage = State.totalPages; }
+        if (State.currentPage < 1) { State.currentPage = 1; }
+        document.getElementById('page-total').innerText = State.totalPages;
+        await renderPage(State.currentPage);
+        // ปิดเอกสารเดิมหลังเรนเดอร์ชุดใหม่เสร็จ ไม่งั้นทุกครั้งที่หมุน/ลบ/รวมหน้า
+        // จะทิ้งเอกสารค้างไว้ใน worker จนหน่วยความจำบวม
+        if (previousDoc && previousDoc !== State.pdfDoc) {
+          previousDoc.destroy().catch(function () {});
+        }
+      }
+      // pdf.js ห้ามเรนเดอร์ลง canvas เดียวกันซ้อนกัน ("Cannot use the same canvas during
+      // multiple render() operations") ซึ่งเกิดได้จากกดเปลี่ยนหน้ารัว ๆ หรือย่อ/ขยายจอระหว่างเรนเดอร์
+      // จึงต่อคิวให้เรนเดอร์ทีละครั้ง และข้ามคิวที่มีคำสั่งใหม่กว่ามาแทนแล้ว
+      let renderSeq = 0;
+      let renderChain = Promise.resolve();
+      function renderPage(pageNum) {
+        let mySeq = ++renderSeq;
+        renderChain = renderChain.then(function () {
+          if (mySeq !== renderSeq) { return; }
+          return doRenderPage(pageNum);
+        }).catch(function (err) { console.error('renderPage error:', err); });
+        return renderChain;
+      }
+      async function doRenderPage(pageNum) {
+        if (!State.pdfDoc) { return; }
+        State.selectedElementId = null;
+        let page = await State.pdfDoc.getPage(pageNum);
+        let unscaledViewport = page.getViewport({ scale: 1.0 });
+        let workspace = document.getElementById('workspace-container');
+        let padding = window.innerWidth < 768 ? 32 : 64;
+        let availableWidth = workspace.clientWidth - padding;
+        State.scale = Math.min(availableWidth / unscaledViewport.width, 1.5);
+        let viewport = page.getViewport({ scale: State.scale });
+        let canvas = document.getElementById('pdf-canvas');
+        let ctx = canvas.getContext('2d');
+        let dpr = window.devicePixelRatio || 1;
+        canvas.width = viewport.width * dpr;
+        canvas.height = viewport.height * dpr;
+        ctx.scale(dpr, dpr);
+        canvas.style.width = viewport.width + 'px';
+        canvas.style.height = viewport.height + 'px';
+        let wrapper = document.getElementById('canvas-wrapper');
+        wrapper.style.width = viewport.width + 'px';
+        wrapper.style.height = viewport.height + 'px';
+        await page.render({ canvasContext: ctx, viewport: viewport }).promise;
+        document.getElementById('page-input').value = pageNum;
+        renderOverlay();
+      }
+      let resizeTimer;
+      window.addEventListener('resize', function () {
+        clearTimeout(resizeTimer);
+        resizeTimer = setTimeout(function () { if (State.pdfDoc) { renderPage(State.currentPage); } }, 300);
+      });
+      function changePage(offset) {
+        let newPage = State.currentPage + offset;
+        if (newPage >= 1 && newPage <= State.totalPages) {
+          State.currentPage = newPage; 
+          renderPage(State.currentPage);
+        }
+      }
+      function goToPage(val) {
+        let num = parseInt(val);
+        if (num >= 1 && num <= State.totalPages) {
+          State.currentPage = num; 
+          renderPage(State.currentPage);
+        } 
+        else {
+          document.getElementById('page-input').value = State.currentPage;
+        }
+      }
+      function renderOverlay() {
+        let overlay = document.getElementById('pdf-overlay');
+        overlay.innerHTML = '';
+        let elements = State.edits[State.currentPage] || [];
+        elements.forEach(function (elem) {
+          let el = document.createElement('div');
+          let isSelected = State.selectedElementId === elem.id;
+          el.className = 'pdf-element ' + (isSelected ? 'selected' : 'hover:outline hover:outline-1 hover:outline-blue-300');
+          el.style.left = (elem.x * State.scale) + 'px';
+          el.style.top = (elem.y * State.scale) + 'px';
+          el.id = 'elem-' + elem.id;
+          if (elem.type === 'text') {
+            el.style.fontSize = (elem.fontSize * State.scale) + 'px';
+            el.style.color = elem.color || '#000000';
+            el.style.fontFamily = 'Sarabun';
+            el.style.lineHeight = '1.2';
+            el.style.whiteSpace = 'pre-wrap';
+            el.innerText = elem.text;
+            el.ondblclick = function (e) { e.stopPropagation(); openTextEditor(elem); };
+            if (isSelected) {
+              let editBtn = document.createElement('div');
+              editBtn.className = 'action-btn edit-btn';
+              editBtn.innerHTML = '<i class="fa-solid fa-pen"></i>';
+              editBtn.onmousedown = editBtn.ontouchstart = function (e) { e.stopPropagation(); e.preventDefault(); openTextEditor(elem); };
+              el.appendChild(editBtn);
+            }
+          } 
+          else if (elem.type === 'image') {
+            el.style.width = (elem.w * State.scale) + 'px';
+            el.style.height = (elem.h * State.scale) + 'px';
+            let img = document.createElement('img');
+            img.src = elem.imgData;
+            img.className = 'w-full h-full pointer-events-none object-contain';
+            el.appendChild(img);
+            if (isSelected) {
+              let resizer = document.createElement('div');
+              resizer.className = 'resize-handle';
+              resizer.onmousedown = resizer.ontouchstart = function (e) { startResize(e, elem); };
+              el.appendChild(resizer);
+            }
+          }
+          if (isSelected) {
+            let delBtn = document.createElement('div');
+            delBtn.className = 'action-btn delete-btn';
+            delBtn.innerHTML = '<i class="fa-solid fa-xmark"></i>';
+            delBtn.onmousedown = delBtn.ontouchstart = function (e) {
+              e.stopPropagation(); e.preventDefault();
+              State.edits[State.currentPage] = State.edits[State.currentPage].filter(function (e) { return e.id !== elem.id; });
+              State.selectedElementId = null;
+              renderOverlay();
+            };
+            el.appendChild(delBtn);
+          }
+          el.onmousedown = el.ontouchstart = function (e) { startDrag(e, elem); };
+          overlay.appendChild(el);
+        });
+      }
+      document.getElementById('pdf-overlay').addEventListener('mousedown', deselectAll);
+      document.getElementById('pdf-overlay').addEventListener('touchstart', deselectAll, { passive: true });
+      function deselectAll(e) {
+        if (e.target.id === 'pdf-overlay') { 
+          State.selectedElementId = null; 
+          renderOverlay(); 
+        }
+      }
+      function saveElement(elem) {
+        if (!State.edits[State.currentPage]) { State.edits[State.currentPage] = []; }
+        State.edits[State.currentPage].push(elem);
+        State.selectedElementId = elem.id;
+        document.getElementById('workspace-container').scrollTop = 0;
+        renderOverlay();
+      }
+      let isDragging = false, isResizing = false, targetElem = null;
+      let startX, startY, initX, initY, initW, initH;
+      function getClientPos(e) {
+        if (e.touches && e.touches.length > 0) { return { x: e.touches[0].clientX, y: e.touches[0].clientY }; }
+        return { x: e.clientX, y: e.clientY };
+      }
+      function startDrag(e, elem) {
+        if (e.target.closest('.action-btn') || isResizing) { return; }
+        e.stopPropagation();
+        State.selectedElementId = elem.id; renderOverlay();
+        isDragging = true; targetElem = elem;
+        let pos = getClientPos(e);
+        startX = pos.x; startY = pos.y; initX = elem.x; initY = elem.y;
+      }
+      function startResize(e, elem) {
+        e.stopPropagation(); e.preventDefault();
+        isResizing = true; targetElem = elem;
+        let pos = getClientPos(e);
+        startX = pos.x; startY = pos.y; initW = elem.w; initH = elem.h;
+      }
+      let handleMove = function (e) {
+        if (!isDragging && !isResizing) { return; }
+        let pos = getClientPos(e);
+        let dx = (pos.x - startX) / State.scale;
+        let dy = (pos.y - startY) / State.scale;
+        if (isDragging && targetElem) {
+          e.preventDefault();
+          targetElem.x = initX + dx; targetElem.y = initY + dy;
+          let el = document.getElementById('elem-' + targetElem.id);
+          if (el) { el.style.left = (targetElem.x * State.scale) + 'px'; el.style.top = (targetElem.y * State.scale) + 'px'; }
+        } 
+        else if (isResizing && targetElem) {
+          e.preventDefault();
+          let ratio = initW / initH;
+          let newW = Math.max(20, initW + dx);
+          targetElem.w = newW; targetElem.h = newW / ratio;
+          let el2 = document.getElementById('elem-' + targetElem.id);
+          if (el2) { el2.style.width = (targetElem.w * State.scale) + 'px'; el2.style.height = (targetElem.h * State.scale) + 'px'; }
+        }
+      };
+      let handleEnd = function () {
+        if (isDragging || isResizing) { isDragging = false; isResizing = false; targetElem = null; renderOverlay(); }
+      };
+      window.addEventListener('mousemove', handleMove, { passive: false });
+      window.addEventListener('touchmove', handleMove, { passive: false });
+      window.addEventListener('mouseup', handleEnd);
+      window.addEventListener('touchend', handleEnd);
+      function openTextEditor(elem) {
+        let isNew = !elem;
+        let txtVal = isNew ? '' : elem.text;
+        let sizeVal = isNew ? 16 : elem.fontSize;
+        let colorVal = isNew ? '#000000' : elem.color;
+        Swal.fire({
+          title: isNew ? 'เพิ่มข้อความ' : 'แก้ไขข้อความ',
+          html: '<div class="text-left space-y-4 mt-2">' +
+                  '<div>' +
+                    '<textarea id="swal-text" class="w-full border border-gray-300 rounded-lg p-3 focus:ring-2 focus:ring-indigo-500 focus:outline-none" rows="3" placeholder="พิมพ์ข้อความที่นี่...">' + escapeHtml(txtVal) + '</textarea>' +
+                  '</div>' +
+                  '<div class="flex items-center space-x-4">' +
+                    '<div class="flex-1">' +
+                      '<label class="block text-sm font-medium text-gray-700 mb-1">ขนาดตัวอักษร</label>' +
+                      '<input type="number" id="swal-size" class="w-full border border-gray-300 rounded-lg p-2" min="1" max="400" value="' + escapeHtml(sizeVal) + '">' +
+                    '</div>' +
+                    '<div class="flex-1">' +
+                      '<label class="block text-sm font-medium text-gray-700 mb-1">สีข้อความ</label>' +
+                      '<input type="color" id="swal-color" class="w-full h-10 border border-gray-300 rounded-lg cursor-pointer" value="' + escapeHtml(colorVal) + '">' +
+                    '</div>' +
+                  '</div>' +
+                '</div>',
+          showCancelButton: true, confirmButtonText: 'ตกลง', cancelButtonText: 'ยกเลิก',
+          preConfirm: function () {
+            let txt = document.getElementById('swal-text').value.trim();
+            if (!txt) { 
+              Swal.showValidationMessage('กรุณาพิมพ์ข้อความ'); 
+              return false; 
+            }
+            return { text: txt, fontSize: parseInt(document.getElementById('swal-size').value), color: document.getElementById('swal-color').value };
+          }
+        }).then(function (res) {
+          if (res.isConfirmed && res.value) {
+            if (isNew) { 
+              saveElement({ 
+                id: Date.now().toString(), 
+                type: 'text', 
+                x: 50 / State.scale, 
+                y: 50 / State.scale, 
+                text: res.value.text, 
+                fontSize: res.value.fontSize, 
+                color: res.value.color 
+              }); 
+            }
+            else { 
+              elem.text = res.value.text; 
+              elem.fontSize = res.value.fontSize; 
+              elem.color = res.value.color; 
+              renderOverlay(); 
+            }
+          }
+        });
+      }
+      function openDrawSignature() {
+        if (!State.pdfDoc) { return; }
+        Swal.fire({
+          title: 'วาดลายเซ็นของคุณ',
+          html: '<div class="border-2 border-dashed border-gray-300 rounded-lg overflow-hidden bg-white shadow-inner mb-3">' +
+                  '<canvas id="sig-canvas"></canvas>' +
+                '</div>' +
+                '<button id="clear-sig" class="w-full py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition font-medium border border-gray-200"><i class="fa-solid fa-eraser mr-2"></i> ลบกระดาน</button>',
+          showCancelButton: true, confirmButtonText: 'แทรกลายเซ็น', cancelButtonText: 'ยกเลิก', confirmButtonColor: '#4f46e5', width: 500,
+          didOpen: function () {
+            let canvas = document.getElementById('sig-canvas');
+            canvas.width = canvas.parentElement.clientWidth; canvas.height = 200;
+            let ctx = canvas.getContext('2d');
+            ctx.lineWidth = 3; ctx.lineCap = 'round'; ctx.lineJoin = 'round'; ctx.strokeStyle = '#000000';
+            let drawing = false, lastX = 0, lastY = 0;
+            function getPos(e) {
+              let rect = canvas.getBoundingClientRect();
+              let clientX = e.touches ? e.touches[0].clientX : e.clientX;
+              let clientY = e.touches ? e.touches[0].clientY : e.clientY;
+              return { x: clientX - rect.left, y: clientY - rect.top };
+            }
+            let start = function (e) { e.preventDefault(); drawing = true; let pos = getPos(e); lastX = pos.x; lastY = pos.y; ctx.beginPath(); ctx.arc(lastX, lastY, ctx.lineWidth / 2, 0, Math.PI * 2); ctx.fill(); };
+            let draw = function (e) { if (!drawing) { return; } e.preventDefault(); let pos = getPos(e); ctx.beginPath(); ctx.moveTo(lastX, lastY); ctx.lineTo(pos.x, pos.y); ctx.stroke(); lastX = pos.x; lastY = pos.y; };
+            let stop = function () { drawing = false; };
+            canvas.addEventListener('mousedown', start); canvas.addEventListener('mousemove', draw); window.addEventListener('mouseup', stop);
+            canvas.addEventListener('touchstart', start, { passive: false }); canvas.addEventListener('touchmove', draw, { passive: false }); window.addEventListener('touchend', stop);
+            document.getElementById('clear-sig').onclick = function () { ctx.clearRect(0, 0, canvas.width, canvas.height); };
+          },
+          preConfirm: function () {
+            let canvas = document.getElementById('sig-canvas');
+            let blank = document.createElement('canvas'); blank.width = canvas.width; blank.height = canvas.height;
+            if (canvas.toDataURL() === blank.toDataURL()) { Swal.showValidationMessage('กรุณาวาดลายเซ็นก่อน'); return false; }
+            return canvas.toDataURL('image/png');
+          }
+        }).then(function (result) {
+          if (result.isConfirmed && result.value) {
+            let img = new Image();
+            img.onload = function () {
+              let aspect = img.height / img.width;
+              let w = 200;
+              saveElement({ id: Date.now().toString(), type: 'image', x: 50 / State.scale, y: 50 / State.scale, w: w, h: w * aspect, imgData: result.value });
+            };
+            img.src = result.value;
+          }
+        });
+      }
+      function handleImageUpload(e) {
+        if (!State.pdfDoc || !e.target.files || e.target.files.length === 0) { return; }
+        let file = e.target.files[0];
+        let reader = new FileReader();
+        reader.onload = function (event) {
+          let img = new Image();
+          img.onload = function () {
+            let w = img.width, h = img.height; let maxW = 200;
+            if (w > maxW) { h = h * (maxW / w); w = maxW; }
+            saveElement({ id: Date.now().toString(), type: 'image', x: 50 / State.scale, y: 50 / State.scale, w: w, h: h, imgData: event.target.result });
+          };
+          img.src = event.target.result;
+        };
+        reader.readAsDataURL(file);
+        e.target.value = '';
+        autoCloseSidebar();
+      }
+      function clearCurrentPage() {
+        if (!State.pdfDoc) { return; }
+        Swal.fire({
+          title: 'ยืนยันการล้างหน้า?', text: "องค์ประกอบที่เพิ่มในหน้านี้จะถูกลบทั้งหมด", icon: 'warning',
+          showCancelButton: true, confirmButtonColor: '#ef4444', confirmButtonText: 'ลบเลย', cancelButtonText: 'ยกเลิก'
+        }).then(function (result) {
+          if (result.isConfirmed) { State.edits[State.currentPage] = []; State.selectedElementId = null; renderOverlay(); }
+        });
+      }
+      async function rotateCurrentPage() {
+        if (!State.pdfDoc) return;
+        Swal.fire({ title: 'กำลังหมุนกระดาษ...', allowOutsideClick: false, didOpen: function () { Swal.showLoading(); } });
+        try {
+          let pdfDoc = await PDFLib.PDFDocument.load(State.pdfBytes, { ignoreEncryption: true });
+          let page = pdfDoc.getPage(State.currentPage - 1);
+          let currentAngle = page.getRotation().angle;
+          page.setRotation(PDFLib.degrees(currentAngle + 90));
+          State.pdfBytes = await pdfDoc.save();
+          await loadPDFToViewer();
+          Swal.close(); showToast('หมุนกระดาษเรียบร้อย');
+        } catch (e) { Swal.fire('Error', 'เกิดข้อผิดพลาดในการหมุน', 'error'); }
+      }
+      async function deleteCurrentPage() {
+        if (!State.pdfDoc) { return; }
+        if (State.totalPages <= 1) { return Swal.fire('ลบไม่ได้', 'เอกสารต้องมีอย่างน้อย 1 หน้า', 'warning'); }
+        Swal.fire({
+          title: 'ลบหน้านี้?', text: "คุณต้องการลบหน้าที่ " + State.currentPage + " ถาวรใช่หรือไม่?", icon: 'warning',
+          showCancelButton: true, confirmButtonColor: '#ef4444', confirmButtonText: 'ลบหน้า', cancelButtonText: 'ยกเลิก'
+        }).then(async function (result) {
+          if (result.isConfirmed) {
+            Swal.fire({ title: 'กำลังลบ...', allowOutsideClick: false, didOpen: function () { Swal.showLoading(); } });
+            try {
+              let pdfDoc = await PDFLib.PDFDocument.load(State.pdfBytes, { ignoreEncryption: true });
+              pdfDoc.removePage(State.currentPage - 1);
+              State.pdfBytes = await pdfDoc.save();
+              let newEdits = {};
+              for (let i = 1; i <= State.totalPages; i++) {
+                if (i < State.currentPage) { newEdits[i] = State.edits[i]; }
+                else if (i > State.currentPage) { newEdits[i - 1] = State.edits[i]; }
+              }
+              State.edits = newEdits;
+              await loadPDFToViewer();
+              Swal.close(); showToast('ลบหน้าสำเร็จ');
+            } catch (e) { Swal.fire('Error', 'ลบหน้าไม่สำเร็จ', 'error'); }
+          }
+        });
+      }
+      async function generateThumbnails(pdfDoc, sourceStr) {
+        let thumbs = [];
+        for (let i = 1; i <= pdfDoc.numPages; i++) {
+          let page = await pdfDoc.getPage(i);
+          let viewport = page.getViewport({ scale: 0.3 });
+          let canvas = document.createElement('canvas');
+          canvas.width = viewport.width; canvas.height = viewport.height;
+          let ctx = canvas.getContext('2d');
+          await page.render({ canvasContext: ctx, viewport: viewport }).promise;
+          thumbs.push({ source: sourceStr, pageNum: i, imgData: canvas.toDataURL('image/jpeg', 0.6) });
+        }
+        return thumbs;
+      }
+      function handleMergeUpload(e) {
+        if (!State.pdfDoc || !e.target.files || e.target.files.length === 0) { return; }
+        let file = e.target.files[0];
+        if (file.type !== 'application/pdf') {
+          showToast('กรุณาเลือกไฟล์ PDF เท่านั้น', 'error');
+          e.target.value = '';
+          return;
+        }
+        Swal.fire({ title: 'กำลังเตรียมหน้ากระดาษ...', text: 'รอสักครู่...', allowOutsideClick: false, didOpen: function () { Swal.showLoading(); } });
+        let reader = new FileReader();
+        reader.onload = async function (event) {
+          try {
+            let arrayBuffer = event.target.result;
+            let newPdfBytes = new Uint8Array(arrayBuffer);
+            let mainThumbs = await generateThumbnails(State.pdfDoc, 'main');
+            let dataToPass = new Uint8Array(newPdfBytes); // copy
+            let newLoadingTask = pdfjsLib.getDocument({ data: dataToPass, isEvalSupported: false });
+            let newPdfDoc = await newLoadingTask.promise;
+            let newThumbs = await generateThumbnails(newPdfDoc, 'new');
+            await newPdfDoc.destroy().catch(function () {});
+            Swal.close();
+            openOrganizerModal(mainThumbs, newThumbs, newPdfBytes);
+            e.target.value = '';
+            autoCloseSidebar();
+          } catch (error) { 
+            console.error(error); 
+            Swal.fire('Error', 'ไม่สามารถอ่านไฟล์ที่นำมารวมได้', 'error'); 
+          }
+        };
+        reader.onerror = function () {
+          Swal.fire('ข้อผิดพลาด', 'ไม่สามารถอ่านไฟล์ได้', 'error');
+        };
+        reader.readAsArrayBuffer(file);
+      }
+      async function openReorderModal() {
+        if (!State.pdfDoc) { return; }
+        Swal.fire({ title: 'กำลังเตรียมหน้ากระดาษ...', allowOutsideClick: false, didOpen: function () { Swal.showLoading(); } });
+        let mainThumbs = await generateThumbnails(State.pdfDoc, 'main');
+        Swal.close();
+        openOrganizerModal(mainThumbs, [], null);
+      }
+      function openOrganizerModal(mainThumbs, newThumbs, newPdfBytes) {
+        let allThumbs = mainThumbs.concat(newThumbs);
+        let isMergeMode = newThumbs.length > 0;
+        let html = '<div id="sortable-grid" class="grid grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3 max-h-[60vh] overflow-y-auto p-2">';
+        allThumbs.forEach(function (t, idx) {
+          let badge = t.source === 'new' ? '<span class="absolute top-1 right-1 bg-green-500 text-white text-[10px] px-1.5 py-0.5 rounded shadow">ใหม่</span>' : '';
+          html += '<div class="page-item relative cursor-move border-2 border-transparent hover:border-indigo-400 rounded-lg transition-all bg-gray-100 p-1 shadow-sm select-none" ' + 'draggable="true" data-source="' + t.source + '" data-page="' + t.pageNum + '">' + badge +
+                    '<span class="page-number absolute top-1 left-1 bg-gray-800 text-white text-[10px] w-5 h-5 flex items-center justify-center rounded-full shadow">' + (idx + 1) + '</span>' +
+                    '<img src="' + t.imgData + '" class="w-full h-auto pointer-events-none border border-gray-300 bg-white rounded">' +
+                  '</div>';
+        });
+        html += '</div>';
+        html += '<p class="text-sm text-gray-500 mt-4 bg-gray-100 p-2 rounded-lg"><i class="fa-solid fa-hand-pointer text-indigo-500 mr-2"></i><strong>ลากและวาง</strong> หรือ <strong>แตะ 2 ครั้ง</strong> เพื่อสลับตำแหน่งหน้า</p>';
+        Swal.fire({
+          title: isMergeMode ? 'จัดเรียงและรวมไฟล์' : 'จัดเรียงหน้ากระดาษ',
+          html: html, width: '80%', showCancelButton: true, confirmButtonText: 'ยืนยัน (Apply)', cancelButtonText: 'ยกเลิก',
+          didOpen: function () {
+            let grid = document.getElementById('sortable-grid');
+            let draggedItem = null; let selectedForTouchMove = null;
+            grid.querySelectorAll('.page-item').forEach(function (item) {
+              item.addEventListener('dragstart', function () { draggedItem = this; let self = this; setTimeout(function () { self.classList.add('dragging'); }, 0); });
+              item.addEventListener('dragend', function () { this.classList.remove('dragging'); grid.querySelectorAll('.page-item').forEach(function (i) { i.classList.remove('over'); }); recalculateNumbers(grid); });
+              item.addEventListener('dragover', function (e) { e.preventDefault(); this.classList.add('over'); });
+              item.addEventListener('dragleave', function () { this.classList.remove('over'); });
+              item.addEventListener('drop', function (e) {
+                e.preventDefault(); this.classList.remove('over');
+                  if (draggedItem && draggedItem !== this) {
+                    let allItems = Array.prototype.slice.call(grid.querySelectorAll('.page-item'));
+                    let draggedIdx = allItems.indexOf(draggedItem);
+                    let droppedIdx = allItems.indexOf(this);
+                    if (draggedIdx < droppedIdx) { this.parentNode.insertBefore(draggedItem, this.nextSibling); }
+                    else { this.parentNode.insertBefore(draggedItem, this); }
+                  }
+              });
+              item.addEventListener('click', function (e) {
+                if (!selectedForTouchMove) {
+                  selectedForTouchMove = this; this.classList.add('ring-4', 'ring-indigo-500');
+                } 
+                else {
+                  if (selectedForTouchMove !== this) {
+                    let allItems = Array.prototype.slice.call(grid.querySelectorAll('.page-item'));
+                    let selIdx = allItems.indexOf(selectedForTouchMove);
+                    let targetIdx = allItems.indexOf(this);
+                    if (selIdx < targetIdx) { this.parentNode.insertBefore(selectedForTouchMove, this.nextSibling); }
+                    else { this.parentNode.insertBefore(selectedForTouchMove, this); }
+                  }
+                  selectedForTouchMove.classList.remove('ring-4', 'ring-indigo-500');
+                  selectedForTouchMove = null; recalculateNumbers(grid);
+                }
+              });
+            });
+            function recalculateNumbers(container) { container.querySelectorAll('.page-item').forEach(function (it, i) { it.querySelector('.page-number').innerText = i + 1; }); }
+          },
+          preConfirm: function () {
+            let finalOrder = [];
+            document.getElementById('sortable-grid').querySelectorAll('.page-item').forEach(function (item) {
+              finalOrder.push({ source: item.getAttribute('data-source'), pageNum: parseInt(item.getAttribute('data-page')) });
+            });
+            return finalOrder;
+          }
+        }).then(function (result) {
+          if (result.isConfirmed) { applyMergeAndReorder(result.value, newPdfBytes); }
+        });
+      }
+      async function applyMergeAndReorder(finalOrder, newPdfBytes) {
+        Swal.fire({ title: 'กำลังประมวลผล PDF...', text: 'กำลังสร้างโครงสร้างใหม่...', allowOutsideClick: false, didOpen: function () { Swal.showLoading(); } });
+        try {
+          let newPdf = await PDFLib.PDFDocument.create();
+          let mainDoc = await PDFLib.PDFDocument.load(State.pdfBytes, { ignoreEncryption: true });
+          let newDoc = newPdfBytes ? await PDFLib.PDFDocument.load(newPdfBytes, { ignoreEncryption: true }) : null;
+          let newEdits = {};
+          for (let i = 0; i < finalOrder.length; i++) {
+            let item = finalOrder[i];
+            let newPageIndex = i + 1;
+            if (item.source === 'main') {
+              let copiedPages = await newPdf.copyPages(mainDoc, [item.pageNum - 1]);
+              newPdf.addPage(copiedPages[0]);
+              if (State.edits[item.pageNum]) { newEdits[newPageIndex] = State.edits[item.pageNum].slice(); }
+            } 
+            else if (item.source === 'new') {
+              let copiedPages2 = await newPdf.copyPages(newDoc, [item.pageNum - 1]);
+              newPdf.addPage(copiedPages2[0]);
+            }
+          }
+          State.pdfBytes = await newPdf.save();
+          State.edits = newEdits;
+          await loadPDFToViewer();
+          Swal.close(); showToast('ประมวลผลเสร็จสิ้น!');
+        } catch (error) { console.error(error); Swal.fire('Error', 'เกิดข้อผิดพลาดในการประมวลผล', 'error'); }
+      }
+      // pdf-lib (Hopding) ไม่รองรับการเข้ารหัส จึงเปลี่ยนไปใช้ @cantoo/pdf-lib
+      // ซึ่งเป็น fork ที่ API เดิมทุกอย่างเหมือนกัน (ยังเรียกผ่าน global PDFLib ตัวเดิม)
+      // แต่เพิ่ม pdfDoc.encrypt() แบบ AES-256 จริง ๆ (มาตรฐาน ISO 32000-2)
+      function setPassword() {
+        if (!State.pdfDoc) { return; }
+        Swal.fire({
+          title: 'ตั้งรหัสผ่านป้องกันไฟล์ (AES-256)',
+          html: '<div class="text-left space-y-3 mt-2">' +
+                  '<div>' +
+                    '<label class="block text-sm font-medium text-gray-700 mb-1">รหัสผ่านเปิดไฟล์ (User password)</label>' +
+                    '<input type="password" id="swal-user-pass" class="w-full border border-gray-300 rounded-lg p-2" placeholder="เว้นว่าง = ยกเลิกการป้องกัน" value="' + escapeHtml(State.password ? State.password.userPassword : '') + '">' +
+                  '</div>' +
+                  '<div>' +
+                    '<label class="block text-sm font-medium text-gray-700 mb-1">รหัสผ่านเจ้าของไฟล์ (Owner password, ไม่บังคับ)</label>' +
+                    '<input type="password" id="swal-owner-pass" class="w-full border border-gray-300 rounded-lg p-2" placeholder="เว้นว่าง = ใช้รหัสผ่านเปิดไฟล์ชุดเดียวกัน" value="' + escapeHtml(State.password ? (State.password.ownerPassword || '') : '') + '">' +
+                  '</div>' +
+                  '<p class="text-xs text-gray-500">รหัสผ่านเปิดไฟล์ (User) ใช้เพื่อ<strong>เปิดอ่าน</strong>เอกสาร ส่วนรหัสผ่านเจ้าของไฟล์ (Owner) ใช้ควบคุมสิทธิ์แก้ไข/พิมพ์/คัดลอก — ถ้าไม่กรอกจะใช้รหัสผ่านเดียวกับ User</p>' +
+                '</div>',
+          showCancelButton: true, confirmButtonText: 'ตกลง', cancelButtonText: 'ยกเลิก',
+          preConfirm: function () {
+            let userPass = document.getElementById('swal-user-pass').value;
+            let ownerPass = document.getElementById('swal-owner-pass').value;
+            if (!userPass) { return { clear: true }; }
+            return { clear: false, userPassword: userPass, ownerPassword: ownerPass || userPass };
+          }
+        }).then(function (res) {
+          if (!res.isConfirmed) { return; }
+          let btn = document.getElementById('btn-text-password');
+          if (res.value.clear) {
+            State.password = null;
+            btn.innerText = 'ตั้งรหัสผ่าน (Protect)';
+            btn.className = 'text-sm';
+            showToast('ยกเลิกการตั้งรหัสผ่านแล้ว');
+          } else {
+            State.password = { userPassword: res.value.userPassword, ownerPassword: res.value.ownerPassword };
+            btn.innerText = 'มีรหัสผ่านป้องกันแล้ว 🔒';
+            btn.className = 'text-sm text-emerald-400 font-bold';
+            showToast('ตั้งรหัสผ่านเตรียมส่งออกเรียบร้อย (เข้ารหัสจริงตอนดาวน์โหลด)');
+          }
+        });
+      }
+      function arrayBufferToBase64(buffer) {
+        let binary = '';
+        let bytes = new Uint8Array(buffer);
+        let len = bytes.byteLength;
+        let chunkSize = 32768; // 32KB
+        for (let i = 0; i < len; i += chunkSize) {
+          binary += String.fromCharCode.apply(null, bytes.subarray(i, i + chunkSize));
+        }
+        return btoa(binary);
+      }
+      async function getThaiFont() {
+        if (State.thaiFontBytes) { return State.thaiFontBytes; }
+        // โหลดจากไฟล์ในรีโปเท่านั้น (เดิมดึงจาก fontmeme.com ก่อน แล้วค่อย fallback มาไฟล์นี้)
+        // ฟอนต์ตัวนี้ถูกฝังลงใน PDF ที่ผู้ใช้ส่งออก จึงต้องมาจากแหล่งที่เราควบคุมได้
+        let res = await fetch('./THSarabunNew.ttf');
+        if (!res.ok) { throw new Error('โหลดฟอนต์ไทยไม่สำเร็จ: HTTP ' + res.status); }
+        State.thaiFontBytes = await res.arrayBuffer();
+        return State.thaiFontBytes;
+      }
+      let hexToRgb = function (hex) {
+        let result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
+        return result ? { r: parseInt(result[1], 16) / 255, g: parseInt(result[2], 16) / 255, b: parseInt(result[3], 16) / 255 } : { r: 0, g: 0, b: 0 };
+      }
+      async function buildExportedPDFBytes() {
+        let pdfDoc = await PDFLib.PDFDocument.load(State.pdfBytes, { ignoreEncryption: true });
+        let pages  = pdfDoc.getPages();
+        let thaiFontData = await getThaiFont().catch(function (e) { console.error(e); return null; });
+        if (!thaiFontData) {
+          // ไม่มีฟอนต์ = ฝังข้อความไม่ได้ ต้องบอกผู้ใช้ ไม่ใช่ปล่อยให้ข้อความหายไปเฉย ๆ
+          let hasTextEdit = Object.keys(State.edits).some(function (k) {
+            return (State.edits[k] || []).some(function (it) { return it.type === 'text'; });
+          });
+          if (hasTextEdit) { showToast('โหลดฟอนต์ไทยไม่สำเร็จ ข้อความที่เพิ่มไว้จะไม่ถูกฝังลงไฟล์', 'error'); }
+        }
+        if (thaiFontData) {
+          pdfDoc.registerFontkit(window.fontkit);
+          let customFont = await pdfDoc.embedFont(thaiFontData);
+          for (let pageNumStr in State.edits) {
+            if (!State.edits.hasOwnProperty(pageNumStr)) { continue; }
+            let pageEdits = State.edits[pageNumStr];
+            if (!pageEdits || pageEdits.length === 0) { continue; }
+            let pageIndex = parseInt(pageNumStr) - 1;
+            if (pageIndex < 0 || pageIndex >= pages.length) { continue; }
+            let pdfPage = pages[pageIndex];
+            let pdfH = pdfPage.getSize().height;
+            for (let k = 0; k < pageEdits.length; k++) {
+              let edit = pageEdits[k];
+              if (edit.type === 'text') {
+                let rgb      = hexToRgb(edit.color || '#000000');
+                let fontSize = edit.fontSize;
+                let y        = pdfH - edit.y - (fontSize * 0.85);
+                pdfPage.drawText(edit.text, { x: edit.x, y: y, size: fontSize, font: customFont, color: PDFLib.rgb(rgb.r, rgb.g, rgb.b), lineHeight: fontSize * 1.2 });
+              } 
+              else if (edit.type === 'image') {
+                let imgRes = await fetch(edit.imgData);
+                let imgBytes = await imgRes.arrayBuffer();
+                let pdfImg   = edit.imgData.indexOf('data:image/jpeg') === 0
+                  ? await pdfDoc.embedJpg(imgBytes)
+                  : await pdfDoc.embedPng(imgBytes);
+                pdfPage.drawImage(pdfImg, { x: edit.x, y: pdfH - edit.y - edit.h, width: edit.w, height: edit.h });
+              }
+            }
+          }
+        } 
+        else {
+          for (let pageNumStr2 in State.edits) {
+            if (!State.edits.hasOwnProperty(pageNumStr2)) { continue; }
+            let pageEdits2 = State.edits[pageNumStr2];
+            if (!pageEdits2 || pageEdits2.length === 0) { continue; }
+            let pageIndex2 = parseInt(pageNumStr2) - 1;
+            if (pageIndex2 < 0 || pageIndex2 >= pages.length) { continue; }
+            let pdfPage2 = pages[pageIndex2];
+            let pdfH2 = pdfPage2.getSize().height;
+            for (let m = 0; m < pageEdits2.length; m++) {
+              let edit2 = pageEdits2[m];
+              if (edit2.type === 'image') {
+                let imgRes2 = await fetch(edit2.imgData);
+                let imgBytes2 = await imgRes2.arrayBuffer();
+                let pdfImg2   = edit2.imgData.indexOf('data:image/jpeg') === 0
+                  ? await pdfDoc.embedJpg(imgBytes2)
+                  : await pdfDoc.embedPng(imgBytes2);
+                pdfPage2.drawImage(pdfImg2, { x: edit2.x, y: pdfH2 - edit2.y - edit2.h, width: edit2.w, height: edit2.h });
+              }
+            }
+          }
+        }
+        if (State.password && State.password.userPassword) {
+          pdfDoc.encrypt({
+            userPassword: State.password.userPassword,
+            ownerPassword: State.password.ownerPassword || State.password.userPassword,
+            permissions: { printing: 'highResolution', modifying: false, copying: false, annotating: false, fillingForms: true, contentAccessibility: true, documentAssembly: false }
+          });
+        }
+        return await pdfDoc.save();
+      }
+      async function exportPDF() {
+        if (!State.pdfBytes) { return; }
+        try {
+          State.selectedElementId = null; renderOverlay();
+          let filename = 'edited_' + State.fileName;
+          let exportRes = await Swal.fire({
+            title: '<i class="fa-solid fa-file-export text-indigo-500"></i> ส่งออก PDF',
+            html: '<div class="flex flex-col gap-3">' + 
+                    '<button id="btn-download-choice" class="w-full py-3 rounded-xl font-semibold text-white flex items-center justify-center gap-2" style="background:var(--theme-primary)">' + 
+                      '<i class="fa-solid fa-download"></i> ดาวน์โหลดบันทึกไฟล์ <strong>' + escapeHtml(filename) + '</strong> ลงเครื่อง' + 
+                    '</button>' + 
+                  '</div>',
+            showConfirmButton: false,
+            showCancelButton: true,
+            cancelButtonText: 'ยกเลิก',
+            didOpen: function () {
+              let btnDl = document.getElementById('btn-download-choice');
+              if (btnDl) { btnDl.addEventListener('click', function () { Swal.clickConfirm(); }); }
+            }
+          });
+          let isConfirmed = exportRes.isConfirmed;
+          let isDenied = exportRes.isDenied;
+          let isDismissed = exportRes.isDismissed;
+          if (isDismissed) { return; }
+          Swal.fire({ title: 'กำลังเตรียม PDF...', text: 'ฝังองค์ประกอบและประมวลผล...', allowOutsideClick: false, didOpen: function () { Swal.showLoading(); } });
+          let modifiedBytes = await buildExportedPDFBytes();
+          if (isConfirmed) {
+            triggerDownload(modifiedBytes, filename, 'application/pdf');
+            Swal.close();
+            showToast('ดาวน์โหลด PDF สำเร็จ!', 'success');
+          } 
+        } catch (error) {
+          console.error(error);
+          Swal.fire('ข้อผิดพลาด', 'เกิดข้อผิดพลาดในการสร้างไฟล์ PDF: ' + escapeHtml(error.message), 'error');
+        }
+      }
+      async function unlockPDF() {
+        if (!State.pdfDoc) return;
+        try {
+          Swal.fire({ title: 'กำลังรวมเลเยอร์...', text: 'แปลงหน้าเป็นรูปภาพ...', allowOutsideClick: false, didOpen: function () { Swal.showLoading(); } });
+          let newPdf = await PDFLib.PDFDocument.create();
+          for (let i = 1; i <= State.totalPages; i++) {
+            let page = await State.pdfDoc.getPage(i);
+            let viewport = page.getViewport({ scale: 2.0 });
+            let canvas = document.createElement('canvas');
+            canvas.width = viewport.width; canvas.height = viewport.height;
+            let ctx = canvas.getContext('2d');
+            await page.render({ canvasContext: ctx, viewport: viewport }).promise;
+            let imgBytes = await fetch(canvas.toDataURL('image/png')).then(function (res) { return res.arrayBuffer(); });
+            let pdfImg = await newPdf.embedPng(imgBytes);
+            let newPage = newPdf.addPage([pdfImg.width, pdfImg.height]);
+            newPage.drawImage(pdfImg, { x: 0, y: 0, width: pdfImg.width, height: pdfImg.height });
+          }
+          let pdfBytes = await newPdf.save();
+          triggerDownload(pdfBytes, 'flattened_' + State.fileName, 'application/pdf');
+          Swal.close(); showToast('รวมเลเยอร์สำเร็จ!', 'success');
+        } catch (error) { Swal.fire('ข้อผิดพลาด', 'ไม่สามารถประมวลผลได้', 'error'); }
+      }
+      async function pdfToImages() {
+        if (!State.pdfDoc) { return; }
+        try {
+          Swal.fire({ title: 'กำลังสกัดรูปภาพ...', text: 'กำลังสร้างไฟล์ ZIP', allowOutsideClick: false, didOpen: function () { Swal.showLoading(); } });
+          let zip = new JSZip();
+          for (let i = 1; i <= State.totalPages; i++) {
+            let page = await State.pdfDoc.getPage(i);
+            let viewport = page.getViewport({ scale: 2.0 });
+            let canvas = document.createElement('canvas');
+            canvas.width = viewport.width; canvas.height = viewport.height;
+            let ctx = canvas.getContext('2d');
+            await page.render({ canvasContext: ctx, viewport: viewport }).promise;
+            zip.file('page-' + i + '.png', canvas.toDataURL('image/png').replace(/^data:image\/png;base64,/, ""), { base64: true });
+          }
+          let content = await zip.generateAsync({ type: 'blob' });
+          triggerDownload(content, State.fileName.replace(/\.pdf$/i, '') + '_images.zip', 'application/zip');
+          Swal.close(); showToast('ดาวน์โหลด ZIP สำเร็จ!', 'success');
+        } catch (error) { Swal.fire('ข้อผิดพลาด', 'ไม่สามารถแปลง PDF ได้', 'error'); }
+      }
+      function triggerDownload(data, filename, type) {
+        let blob = data instanceof Blob ? data : new Blob([data], { type: type });
+        let url = URL.createObjectURL(blob);
+        let a = document.createElement('a'); a.href = url; a.download = filename;
+        document.body.appendChild(a); a.click(); document.body.removeChild(a);
+        // อย่า revoke ทันที บางเบราว์เซอร์ (Firefox/Safari) จะยกเลิกการดาวน์โหลดที่ยังไม่เริ่ม
+        setTimeout(function () { URL.revokeObjectURL(url); }, 60000);
+      }
+      function openSettings() {
+        let modal = document.getElementById('settings-modal');
+        document.getElementById('settings-apikey').value = getApiKey();
+        let saved = State.settings.themeColor || '#4f46e5';
+        document.querySelectorAll('.color-swatch').forEach(function (s) {
+          if (s.dataset.color === saved) { s.classList.add('active'); } 
+          else { s.classList.remove('active'); }
+        });
+        document.getElementById('custom-color-picker').value = saved;
+        modal.classList.add('open');
+      }
+      function closeSettings() {
+        document.getElementById('settings-modal').classList.remove('open');
+      }
+      function toggleApiKeyVisibility() {
+        let input = document.getElementById('settings-apikey');
+        let icon = document.getElementById('eye-icon');
+        if (input.type === 'password') {
+          input.type = 'text';
+          icon.className = 'fa-solid fa-eye-slash';
+        } 
+        else {
+          input.type = 'password';
+          icon.className = 'fa-solid fa-eye';
+        }
+      }
+      function hexToHsl(hex) {
+        let r = parseInt(hex.slice(1, 3), 16) / 255, g = parseInt(hex.slice(3, 5), 16) / 255, b = parseInt(hex.slice(5, 7), 16) / 255;
+        let max = Math.max(r, g, b), min = Math.min(r, g, b);
+        let h, s, l = (max + min) / 2;
+        if (max === min) { h = s = 0; } 
+        else {
+          let d = max - min; s = l > 0.5 ? d / (2 - max - min) : d / (max + min);
+          switch (max) { case r: h = (g - b) / d + (g < b ? 6 : 0); break; case g: h = (b - r) / d + 2; break; case b: h = (r - g) / d + 4; break; }
+          h /= 6;
+        }
+        return [Math.round(h * 360), Math.round(s * 100), Math.round(l * 100)];
+      }
+      function applyTheme(hex, swatchEl) {
+        let hslVals = hexToHsl(hex);
+        let h = hslVals[0], s = hslVals[1], l = hslVals[2];
+        let hoverHex = 'hsl(' + h + ',' + s + '%,' + Math.max(l - 8, 0) + '%)';
+        let lightHex = 'hsl(' + h + ',' + Math.max(s - 30, 10) + '%,' + Math.min(l + 42, 97) + '%)';
+        let shadowHex = 'hsla(' + h + ',' + s + '%,' + l + '%,0.30)';
+        document.documentElement.style.setProperty('--theme-primary', hex);
+        document.documentElement.style.setProperty('--theme-primary-hover', hoverHex);
+        document.documentElement.style.setProperty('--theme-primary-light', lightHex);
+        document.documentElement.style.setProperty('--theme-primary-shadow', shadowHex);
+        if (swatchEl) {
+          document.querySelectorAll('.color-swatch').forEach(function (s) { s.classList.remove('active'); });
+          swatchEl.classList.add('active');
+        }
+      }
+      function selectTheme(el) {
+        applyTheme(el.dataset.color, el);
+        document.getElementById('custom-color-picker').value = el.dataset.color;
+      }
+      function saveSettings() {
+        let key = document.getElementById('settings-apikey').value.trim();
+        let color = document.getElementById('custom-color-picker').value;
+        State.settings.apiKey = key;
+        State.settings.themeColor = color;
+        applyTheme(color, null);
+        localStorage.setItem('pdf_toolkit_apikey', key);
+        localStorage.setItem('pdf_toolkit_theme', color);
+        showToast('บันทึกการตั้งค่าเรียบร้อย!', 'success');
+        closeSettings();
+      }
+      window.onload = function () { loadSettings(); };
+    </script>
+  </body>
+</html>
