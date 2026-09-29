@@ -35,10 +35,16 @@
     password: null     // { resolve } ระหว่างรอรหัสผ่าน
   };
 
+  // Firefox บน Android (GeckoView): ช่องเลือกไฟล์ที่มี accept แบบไม่ใช่รูปภาพ (application/pdf, .pdf) ทำให้แอปล่ม
+  // ก่อนหน้าเลือกไฟล์จะขึ้น — ช่องที่ไม่มี accept ใช้ได้ปกติ
+  var GECKO_ANDROID = /Android/i.test(navigator.userAgent || '') && /\bGecko\/\d/.test(navigator.userAgent || '');
+
   function isPdf(f) {
     if (!f) return false;
-    if (f.type) return /^application\/(x-)?pdf$/i.test(f.type);
-    return /\.pdf$/i.test(f.name || '');
+    if (/^application\/(x-)?pdf$/i.test(f.type || '')) return true;
+    // ไม่มีชนิดไฟล์ หรือ Android ระบุเป็นไฟล์ทั่วไป (octet-stream) — ดูจากนามสกุล (PdfTools.open ตรวจ %PDF- อีกชั้น)
+    if (!f.type || /^(application|binary)\/octet-stream$/i.test(f.type)) return /\.pdf$/i.test(f.name || '');
+    return false;
   }
 
   function formatBytes(n) {
@@ -198,7 +204,8 @@
       toast('แปลงไฟล์ PDF ได้เมื่อเปิดผ่านเว็บไซต์ (https) เท่านั้น — ไม่รองรับการเปิดไฟล์จากเครื่องโดยตรง', 'error');
       return;
     }
-    PdfTools.preload();
+    // Firefox บน Android: ไม่โหลด PDF.js ระหว่างสลับไปหน้าเลือกไฟล์ (โหลดตอนเปิดไฟล์แทน)
+    if (!GECKO_ANDROID) PdfTools.preload();
     $('pdfInput').value = '';
     $('pdfInput').click();
   }
@@ -343,9 +350,10 @@
       var lang = localStorage.getItem('ocrLang');
       if (OCR_LANGS.indexOf(lang) >= 0) $('pdfLang').value = lang;
     } catch (_) { /* ignore */ }
-    // Android: หน้าเลือกไฟล์ของระบบกรองได้เฉพาะ MIME type — นามสกุล .pdf ใน accept ทำให้หน้าเลือกไฟล์
-    // ของ Firefox บน Android ค้างแล้วปิดตัว
-    if (/Android/i.test(navigator.userAgent || '')) $('pdfInput').setAttribute('accept', 'application/pdf');
+    // Android: หน้าเลือกไฟล์ของระบบกรองได้เฉพาะ MIME type (นามสกุล .pdf ใช้ไม่ได้) — Firefox บน Android ไม่กรองเลย
+    // (ดู GECKO_ANDROID) ส่วนเบราว์เซอร์อื่นกรองด้วย application/pdf
+    if (GECKO_ANDROID) $('pdfInput').removeAttribute('accept');
+    else if (/Android/i.test(navigator.userAgent || '')) $('pdfInput').setAttribute('accept', 'application/pdf');
     $('btnPdfTools').addEventListener('click', pick);
     $('pdfPick').addEventListener('click', pick);
     $('pdfInput').addEventListener('change', function (e) {

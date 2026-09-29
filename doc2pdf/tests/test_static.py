@@ -73,6 +73,7 @@ class NoThirdPartyTest(unittest.TestCase):
         # ของ Firefox บน Android ค้างแล้วปิดตัว ทุกช่องเลือกไฟล์ที่มีนามสกุลใน accept ต้องถูกเปลี่ยนบน Android
         code = "\n".join(read("js", name) for name in sorted(os.listdir(os.path.join(ROOT, "js"))))
         overrides = dict(re.findall(r"\$\('(\w+)'\)\.setAttribute\('accept', '([^']*)'\)", code))
+        removed = set(re.findall(r"\$\('(\w+)'\)\.removeAttribute\('accept'\)", code))
         for tag, attrs in self.tags:
             if tag == "input" and attrs.get("type") == "file":
                 tokens = [t.strip() for t in (attrs.get("accept") or "").split(",") if t.strip()]
@@ -83,7 +84,11 @@ class NoThirdPartyTest(unittest.TestCase):
         for name, value in overrides.items():
             for token in value.split(","):
                 self.assertRegex(token.strip(), r"^[a-z]+/(?:\*|[a-z0-9.+-]+)$", name)
-        self.assertEqual(code.count("/Android/i.test(navigator.userAgent || '')) $("), 2)
+        # Firefox บน Android ล่มก่อนหน้าเลือกไฟล์จะขึ้นเมื่อ accept ไม่ใช่รูปภาพ — ช่องเลือก PDF ต้องไม่มี accept
+        self.assertEqual(removed, {"pdfInput"})
+        convert = read("js", "pdf-convert.js")
+        self.assertIn("if (GECKO_ANDROID) $('pdfInput').removeAttribute('accept');", convert)
+        self.assertIn("if (!GECKO_ANDROID) PdfTools.preload();", convert)
 
     def test_scripts_contain_no_external_urls(self):
         folder = os.path.join(ROOT, "js")
