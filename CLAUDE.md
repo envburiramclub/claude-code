@@ -14,6 +14,9 @@
 - ทุกระบบ (และทุก repo ของ envburiramclub) อยู่ใต้โดเมน `envburiramclub.github.io` เดียวกัน จึงใช้
   `localStorage`/IndexedDB ร่วมกัน: ห้ามเก็บข้อมูลส่วนบุคคลหรือข้อมูลสำคัญ ตั้งชื่อ key ขึ้นต้นด้วยชื่อโฟลเดอร์
   (เช่น `qr-code:size`) และตรวจค่าที่อ่านกลับมาทุกครั้ง (ใช้ `hasOwnProperty` ไม่ใช่ `table[key]`)
+- ช่องเลือกไฟล์ (`<input type="file">`): Firefox บน Android ล่มก่อนหน้าเลือกไฟล์จะขึ้นเมื่อ `accept` มีนามสกุล
+  (`.csv`, `.pdf`) หรือชนิดที่ไม่ใช่รูปภาพ (`application/pdf`) — บน Android ให้เอา `accept` ออก (หรือใช้แค่ `image/*`
+  สำหรับรูป) แล้วตรวจชนิดไฟล์เองหลังเลือก ดูตัวอย่างใน `csv2vcf/app.js` และ `doc2pdf/js/pdf-convert.js`
 
 ## หนึ่งระบบต่อหนึ่งโฟลเดอร์
 
