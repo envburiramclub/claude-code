@@ -13,7 +13,7 @@ import unittest
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 # ไฟล์ที่เบราว์เซอร์โหลดไปใช้งาน ต้องมีค่า SHA-256 ใน SHA256SUMS เสมอ (ไฟล์สัญญาอนุญาต/เอกสารไม่ต้อง)
-CHECKED_EXTENSIONS = (".js", ".mjs", ".wasm", ".ttf", ".otf", ".woff", ".woff2", ".pfb", ".gz", ".json")
+CHECKED_EXTENSIONS = (".js", ".mjs", ".wasm", ".ttf", ".otf", ".woff", ".woff2", ".pfb", ".gz", ".json", ".css")
 SUM_LINE = re.compile(r"([0-9a-f]{64}) [ *](\S[^\r\n]*)\Z")
 
 

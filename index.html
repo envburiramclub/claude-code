@@ -7,7 +7,7 @@
   <!-- GitHub Pages ตั้ง header เองไม่ได้ จึงกำหนด CSP ที่นี่ หน้านี้ไม่มีสคริปต์เลย ใช้ได้แค่สไตล์และรูปจากเว็บนี้ -->
   <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'self'; img-src 'self'; base-uri 'none'; form-action 'none'">
   <meta name="referrer" content="no-referrer">
-  <meta name="description" content="รวมเครื่องมือที่ใช้งานผ่านเบราว์เซอร์ได้ทันที เช่น แปลงรายชื่อ CSV เป็น vCard สแกนเอกสารเป็น PDF และสร้าง QR Code">
+  <meta name="description" content="รวมเครื่องมือที่ใช้งานผ่านเบราว์เซอร์ได้ทันที เช่น แปลงรายชื่อ CSV เป็น vCard สแกนเอกสารเป็น PDF สร้าง QR Code และแก้ไข PDF">
   <title>รวมเครื่องมือ</title>
   <link rel="icon" href="favicon.svg" type="image/svg+xml">
   <link rel="stylesheet" href="home.css">
@@ -59,6 +59,19 @@
             <span class="app-desc">สร้าง QR Code จากลิงก์ ข้อความ WiFi เบอร์โทร อีเมล หรือพร้อมเพย์พร้อมจำนวนเงิน
               ปรับสี รูปแบบ ใส่โลโก้ และดาวน์โหลดเป็น PNG หรือ SVG ข้อมูลไม่ถูกส่งขึ้นอินเทอร์เน็ต</span>
             <span class="app-folder">qrcode-generator/</span>
+          </span>
+        </a>
+      </li>
+      <li>
+        <a class="app" href="pdfedit/index.html">
+          <span class="app-icon indigo" aria-hidden="true">
+            <svg viewBox="0 0 24 24"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5"/><path d="M8 17c1.5-.6 2.2-3 3-3s.2 2.2 1.6 2.2c1 0 1.4-1.2 2.4-1.2"/></svg>
+          </span>
+          <span class="app-body">
+            <span class="app-name">แก้ไข PDF + AI</span>
+            <span class="app-desc">เพิ่มข้อความภาษาไทย ลายเซ็น และรูปลงไฟล์ PDF จัดเรียง หมุน ลบ รวมหน้า ตั้งรหัสผ่าน
+              แปลงเป็นรูป และสรุป/ถามตอบเนื้อหาด้วย AI (Gemini ใช้ API Key ของคุณ) แก้ไขในเบราว์เซอร์</span>
+            <span class="app-folder">pdfedit/</span>
           </span>
         </a>
       </li>
