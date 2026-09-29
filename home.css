@@ -97,6 +97,7 @@ body {
   stroke-linecap: round; stroke-linejoin: round; }
 .app-icon.teal { background: #0f766e; }
 .app-icon.blue { background: #1f5eff; }
+.app-icon.purple { background: #7c3aed; }
 
 .app-body { display: grid; gap: 4px; min-width: 0; }
 .app-name { font-size: 1.12rem; font-weight: 700; line-height: 1.4; }

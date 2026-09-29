@@ -7,7 +7,7 @@
   <!-- GitHub Pages ตั้ง header เองไม่ได้ จึงกำหนด CSP ที่นี่ หน้านี้ไม่มีสคริปต์เลย ใช้ได้แค่สไตล์และรูปจากเว็บนี้ -->
   <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'self'; img-src 'self'; base-uri 'none'; form-action 'none'">
   <meta name="referrer" content="no-referrer">
-  <meta name="description" content="รวมเครื่องมือที่ใช้งานผ่านเบราว์เซอร์ได้ทันที เช่น แปลงรายชื่อ CSV เป็น vCard และสแกนเอกสารเป็น PDF">
+  <meta name="description" content="รวมเครื่องมือที่ใช้งานผ่านเบราว์เซอร์ได้ทันที เช่น แปลงรายชื่อ CSV เป็น vCard สแกนเอกสารเป็น PDF และสร้าง QR Code">
   <title>รวมเครื่องมือ</title>
   <link rel="icon" href="favicon.svg" type="image/svg+xml">
   <link rel="stylesheet" href="home.css">
@@ -46,6 +46,19 @@
             <span class="app-desc">ถ่ายภาพหรือเลือกรูปเอกสารแล้วสร้างไฟล์ PDF พร้อมครอปอัตโนมัติ ลบเงา ปรับภาพให้คมชัด
               แปลงรูปเป็นข้อความ (OCR) และแปลงไฟล์ PDF เป็นรูป JPG หรือ Word</span>
             <span class="app-folder">doc2pdf/</span>
+          </span>
+        </a>
+      </li>
+      <li>
+        <a class="app" href="qrcode-generator/index.html">
+          <span class="app-icon purple" aria-hidden="true">
+            <svg viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><path d="M14 14h3v3M21 14v.01M14 21h.01M17.5 21H21v-3.5"/></svg>
+          </span>
+          <span class="app-body">
+            <span class="app-name">สร้าง QR Code</span>
+            <span class="app-desc">สร้าง QR Code จากลิงก์ ข้อความ WiFi เบอร์โทร อีเมล หรือพร้อมเพย์พร้อมจำนวนเงิน
+              ปรับสี รูปแบบ ใส่โลโก้ และดาวน์โหลดเป็น PNG หรือ SVG ข้อมูลไม่ถูกส่งขึ้นอินเทอร์เน็ต</span>
+            <span class="app-folder">qrcode-generator/</span>
           </span>
         </a>
       </li>

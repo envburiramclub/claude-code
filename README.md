@@ -7,6 +7,7 @@
 | --- | --- | --- |
 | [`csv2vcf/`](csv2vcf/) | แปลงรายชื่อ CSV เป็นไฟล์ vCard (.vcf) มีทั้งหน้าเว็บ คำสั่งในเทอร์มินัล และเว็บที่รันเอง | <https://envburiramclub.github.io/claude-code/csv2vcf/> |
 | [`doc2pdf/`](doc2pdf/) | สแกนเอกสารเป็น PDF ครอปอัตโนมัติ OCR และแปลง PDF เป็นรูปหรือ Word | <https://envburiramclub.github.io/claude-code/doc2pdf/> |
+| [`qrcode-generator/`](qrcode-generator/) | สร้าง QR Code จากลิงก์ ข้อความ WiFi เบอร์โทร อีเมล และพร้อมเพย์ ใส่โลโก้ ดาวน์โหลด PNG/SVG | <https://envburiramclub.github.io/claude-code/qrcode-generator/> |
 
 รายละเอียดของแต่ละระบบอยู่ใน `README.md` ในโฟลเดอร์ของระบบนั้น
 
