@@ -54,8 +54,25 @@
     return out;
   }
 
+  // นามสกุลของไฟล์รูปที่รับ ใช้เมื่อระบบไม่บอกชนิดไฟล์หรือบอกเป็นไฟล์ทั่วไป (octet-stream)
+  // JFIF (.jfif, .jfi) และ .jpe, .pjpeg, .pjp คือไฟล์ JPEG — เบราว์เซอร์ถอดรหัสจากเนื้อไฟล์ได้เองโดยไม่ดูนามสกุล
+  var IMAGE_EXT = /\.(jpe?g|jpe|jfif?|pjpeg|pjp|png|webp|gif|bmp|heic|heif|avif|tiff?)$/i;
+
+  /**
+   * ไฟล์รูปภาพไหม: ชนิดไฟล์ image/* หรือ (ไม่มีชนิดไฟล์ / ชนิดทั่วไป) + นามสกุลรูปภาพ
+   * เช่น .jfif ที่ Android/macOS ระบุเป็น application/octet-stream — ถ้าไม่ใช่รูปจริง ขั้นถอดรหัสจะแจ้งว่าเปิดไม่ได้
+   */
+  function isImageFile(f) {
+    if (!f) return false;
+    var type = String(f.type || '');
+    if (/^image\//i.test(type)) return true;
+    if (!type || /^(application|binary)\/octet-stream$/i.test(type)) return IMAGE_EXT.test(String(f.name || ''));
+    return false;
+  }
+
   window.Scanner = {
     FILTERS: ScanCore.FILTERS,
+    isImageFile: isImageFile,
     defaultSettings: defaultSettings,
     makeCanvas: makeCanvas,
     releaseCanvas: releaseCanvas,

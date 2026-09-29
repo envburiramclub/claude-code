@@ -8,7 +8,7 @@ const path = require("path");
 const vm = require("vm");
 
 const JS = path.join(__dirname, "..", "js");
-const MODULES = ["thai-text.js", "zip.js", "docx.js", "pdf-export.js", "ocr.js", "pdf-actualtext.js", "pdf-tools.js"];
+const MODULES = ["cv-core.js", "scanner.js", "thai-text.js", "zip.js", "docx.js", "pdf-export.js", "ocr.js", "pdf-actualtext.js", "pdf-tools.js"];
 
 const ctx = {
   console, setTimeout, clearTimeout, Promise, TextEncoder, TextDecoder, URL, Blob, Response,
@@ -58,6 +58,7 @@ const API = {
   // ค่าตั้งค่าจากตาราง PRESETS/FONTS (ชื่อที่ไม่มีจริง เช่น constructor ต้องได้ค่าเริ่มต้น)
   pick: (table, key) => ctx.PdfTools._pick(ctx.PdfTools[table], key, table === "PRESETS" ? "standard" : "sarabun"),
   pageLayout: (w, h, opts) => ctx.PdfExport.pageLayout(w, h, opts),
+  isImageFile: (name, type) => ctx.Scanner.isImageFile({ name, type }),
   heic: heicScenario,
 };
 

@@ -213,6 +213,25 @@ class Doc2pdfTest(unittest.TestCase):
                 self.assertEqual(self.call("pick", "PRESETS", key)[0]["dpi"], 150)
                 self.assertEqual(self.call("pick", "FONTS", key)[0]["name"], "TH Sarabun New")
 
+    def test_image_file_types(self):
+        # JFIF (.jfif, .jfi) และ .jpe, .pjpeg, .pjp คือ JPEG — Android/macOS มักระบุชนิดเป็นไฟล์ทั่วไปหรือไม่ระบุเลย
+        accepted = [
+            ("photo.jfif", ""), ("photo.jfif", "application/octet-stream"), ("PHOTO.JFIF", "binary/octet-stream"),
+            ("photo.jfif", "image/jpeg"), ("photo.jfif", "image/pjpeg"), ("a.jfi", ""), ("a.jpe", ""), ("a.pjpeg", ""),
+            ("a.pjp", ""), ("scan.jpg", ""), ("scan.png", "image/png"), ("iphone.heic", "application/octet-stream"),
+            ("noext", "image/webp"),
+        ]
+        rejected = [
+            ("photo.jfif", "text/plain"), ("doc.pdf", "application/octet-stream"), ("photo.jfif.exe", ""),
+            ("noext", "application/octet-stream"), ("notes.txt", ""), ("jfif", ""), ("photo.jfif ", ""),
+        ]
+        for name, kind in accepted:
+            with self.subTest(name=name, type=kind):
+                self.assertTrue(self.call("isImageFile", name, kind)[0])
+        for name, kind in rejected:
+            with self.subTest(name=name, type=kind):
+                self.assertFalse(self.call("isImageFile", name, kind)[0])
+
     def test_page_layout_with_unknown_page_size(self):
         a4, _ = self.call("pageLayout", 1000, 1414, {"pageSize": "a4", "margin": 10})
         self.assertEqual((round(a4["pw"]), round(a4["ph"])), (210, 297))

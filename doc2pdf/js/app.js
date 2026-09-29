@@ -13,7 +13,6 @@
   var MAX_HEIF_PIXELS = 50e6;         // HEIC ถอดรหัสเป็น RGBA ในหน่วยความจำทั้งภาพ (50 MP ≈ 200 MB)
   var MAX_PAGES = 200;
   var SOURCE_CACHE_SIZE = 2;
-  var IMAGE_EXT = /\.(jpe?g|png|webp|gif|bmp|heic|heif|avif|tiff?)$/i;
 
   var $ = function (id) { return document.getElementById(id); };
 
@@ -98,10 +97,7 @@
   //  โหลดรูปภาพ
   // =====================================================================
 
-  function isImageFile(f) {
-    if (f.type) return /^image\//i.test(f.type);
-    return IMAGE_EXT.test(f.name || '');
-  }
+  var isImageFile = Scanner.isImageFile; // รวมถึง .jfif ที่ระบบบอกชนิดเป็นไฟล์ทั่วไป (js/scanner.js)
 
   function loadImageElement(blob) {
     return new Promise(function (resolve, reject) {

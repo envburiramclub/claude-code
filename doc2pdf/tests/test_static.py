@@ -93,6 +93,11 @@ class NoThirdPartyTest(unittest.TestCase):
         self.assertIn("matchMedia('(pointer: coarse)').matches", convert)
         self.assertIn("if (window.PdfConvert && PdfConvert.isAndroid) $('fileInput').setAttribute('accept', 'image/*');", code)
 
+    def test_image_picker_shows_jfif_on_computers(self):
+        accept = [attrs.get("accept") for tag, attrs in self.tags if tag == "input" and attrs.get("id") == "fileInput"][0]
+        for ext in (".jfif", ".jfi", ".jpe", ".pjpeg", ".pjp"):
+            self.assertIn(ext, accept.split(","))
+
     def test_scripts_contain_no_external_urls(self):
         folder = os.path.join(ROOT, "js")
         for name in sorted(os.listdir(folder)):
