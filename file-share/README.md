@@ -35,8 +35,9 @@ https://envburiramclub.github.io/claude-code/file-share/index.html
 2. เปิด Google Drive API: APIs & Services → Library → "Google Drive API" → Enable
 3. ตั้งค่า Google Auth Platform (หน้ายินยอม OAuth):
    - **Branding:** ชื่อแอป เช่น "ระบบฝากไฟล์" และอีเมลติดต่อ
-   - **Audience:** External แล้วกด **Publish app** (สถานะ In production)
-     ถ้ายังเป็น Testing จะใช้ได้เฉพาะอีเมลที่เพิ่มเป็น Test users
+   - **Audience:** External แล้วกด **Publish app** → Confirm (สถานะต้องเป็น In production)
+     ถ้ายังเป็น Testing จะใช้ได้เฉพาะอีเมลที่เพิ่มเป็น Test users (รวมถึงบัญชีของผู้ดูแลเองด้วย)
+     อย่าอัปโหลดโลโก้และอย่าเพิ่ม scope อื่น ไม่งั้น Google จะบังคับให้ส่งแอปตรวจสอบก่อน
    - **Data Access:** เพิ่ม scope `https://www.googleapis.com/auth/drive.file`
      (สิทธิ์เฉพาะไฟล์ที่แอปสร้าง ไม่ใช่สิทธิ์อ่อนไหว จึงไม่ต้องขอตรวจสอบแอป)
 4. สร้าง Client ID: **Clients** → Create client → Web application
@@ -62,7 +63,7 @@ https://envburiramclub.github.io/claude-code/file-share/index.html
 | ข้อความที่เห็น | สาเหตุและวิธีแก้ |
 | --- | --- |
 | Google: `Error 400: redirect_uri_mismatch` | Authorized redirect URIs ไม่มี URL เต็มด้านบน เพิ่มแล้วรอให้ Google อัปเดต |
-| Google: `Access blocked` หรือ `403: access_denied` | หน้ายินยอมยังเป็น Testing กด Publish app หรือเพิ่มอีเมลเป็น Test users |
+| Google: `Access blocked: ... has not completed the Google verification process` และ `Error 403: access_denied` | หน้ายินยอมยังเป็น Testing: Google Auth Platform → Audience → Publish app (ทุกคนใช้ได้) หรือ Test users → Add users (เฉพาะอีเมลที่เพิ่ม) |
 | Google: `Google Drive API has not been used in project` | ยังไม่ได้ Enable Google Drive API ในโปรเจกต์ |
 | Microsoft: `AADSTS50011` | Redirect URI ไม่ตรง หรือไม่ได้ลงทะเบียนเป็นแพลตฟอร์ม SPA |
 | Microsoft: `AADSTS9002331` หรือ `AADSTS50194` | `microsoftAuthority` ไม่ตรงกับ Supported account types ของแอป |
