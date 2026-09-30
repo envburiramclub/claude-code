@@ -65,7 +65,7 @@ https://envburiramclub.github.io/claude-code/file-share/index.html
 | Google: `Error 400: redirect_uri_mismatch` | Authorized redirect URIs ไม่มี URL เต็มด้านบน เพิ่มแล้วรอให้ Google อัปเดต |
 | Google: `Access blocked: ... has not completed the Google verification process` และ `Error 403: access_denied` | หน้ายินยอมยังเป็น Testing: Google Auth Platform → Audience → Publish app (ทุกคนใช้ได้) หรือ Test users → Add users (เฉพาะอีเมลที่เพิ่ม) |
 | Google: `Google Drive API has not been used in project` | ยังไม่ได้ Enable Google Drive API ในโปรเจกต์ |
-| Microsoft: `AADSTS50011` | Redirect URI ไม่ตรง หรือไม่ได้ลงทะเบียนเป็นแพลตฟอร์ม SPA |
+| Microsoft: `AADSTS50011` หรือ (บัญชีส่วนตัว) `invalid_request: The provided value for the input parameter 'redirect_uri' is not valid` | ยังไม่ได้ลงทะเบียน URL เต็มด้านบน: App registrations → แอป → Authentication → Add a platform → Single-page application → ใส่ URL เต็ม → Configure |
 | Microsoft: `AADSTS9002331` หรือ `AADSTS50194` | `microsoftAuthority` ไม่ตรงกับ Supported account types ของแอป |
 | Microsoft: `AADSTS9002326` หรือ `AADSTS7000218` | Redirect URI ลงทะเบียนเป็น Web แทน SPA |
 
