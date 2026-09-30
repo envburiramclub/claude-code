@@ -7,7 +7,7 @@
   <!-- GitHub Pages ตั้ง header เองไม่ได้ จึงกำหนด CSP ที่นี่ หน้านี้ไม่มีสคริปต์เลย ใช้ได้แค่สไตล์และรูปจากเว็บนี้ -->
   <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'self'; img-src 'self'; base-uri 'none'; form-action 'none'">
   <meta name="referrer" content="no-referrer">
-  <meta name="description" content="รวมเครื่องมือที่ใช้งานผ่านเบราว์เซอร์ได้ทันที เช่น แปลงรายชื่อ CSV เป็น vCard สแกนเอกสารเป็น PDF สร้าง QR Code แก้ไข PDF และลบพื้นหลังรูปภาพ">
+  <meta name="description" content="รวมเครื่องมือที่ใช้งานผ่านเบราว์เซอร์ได้ทันที เช่น แปลงรายชื่อ CSV เป็น vCard สแกนเอกสารเป็น PDF สร้าง QR Code แก้ไข PDF ลบพื้นหลังรูปภาพ และฝากไฟล์">
   <title>รวมเครื่องมือ</title>
   <link rel="icon" href="favicon.svg" type="image/svg+xml">
   <link rel="stylesheet" href="home.css">
@@ -85,6 +85,19 @@
             <span class="app-desc">AI แยกวัตถุออกจากพื้นหลังอัตโนมัติ รองรับ JPG PNG BMP WebP HEIC SVG ICO GIF TIFF
               ปรับขอบ แก้ด้วยแปรง เปลี่ยนสีพื้นหลัง ดาวน์โหลด PNG โปร่งใส ประมวลผลในเครื่อง รูปไม่ถูกส่งขึ้นอินเทอร์เน็ต</span>
             <span class="app-folder">bg-remove/</span>
+          </span>
+        </a>
+      </li>
+      <li>
+        <a class="app" href="file-share/index.html">
+          <span class="app-icon sky" aria-hidden="true">
+            <svg viewBox="0 0 24 24"><path d="M7 18a4.5 4.5 0 0 1-.4-8.98A6 6 0 0 1 18.2 9.5 4 4 0 0 1 17.5 18"/><path d="M12 21v-9m-3.5 3.5L12 12l3.5 3.5"/></svg>
+          </span>
+          <span class="app-body">
+            <span class="app-name">ฝากไฟล์</span>
+            <span class="app-desc">อัปโหลดไฟล์ละไม่เกิน 100 MB ไปยัง Google Drive หรือ OneDrive ของคุณเอง (เข้าสู่ระบบด้วย Gmail/Outlook)
+              หรือเว็บฝากไฟล์ฟรีที่ไม่ต้องสมัคร แล้วรับลิงก์แชร์ พร้อมแจ้งข้อจำกัดของแต่ละที่</span>
+            <span class="app-folder">file-share/</span>
           </span>
         </a>
       </li>

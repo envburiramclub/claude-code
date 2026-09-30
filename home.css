@@ -100,6 +100,7 @@ body {
 .app-icon.purple { background: #7c3aed; }
 .app-icon.indigo { background: #4338ca; }
 .app-icon.cyan { background: #0e7490; }
+.app-icon.sky { background: #2563eb; }
 
 .app-body { display: grid; gap: 4px; min-width: 0; }
 .app-name { font-size: 1.12rem; font-weight: 700; line-height: 1.4; }

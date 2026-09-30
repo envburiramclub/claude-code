@@ -8,6 +8,7 @@
 | [`bg-remove/`](bg-remove/) | ลบพื้นหลังรูปภาพด้วย AI ในเบราว์เซอร์ รองรับ JPG PNG BMP WebP HEIC SVG ICO GIF TIFF | <https://envburiramclub.github.io/claude-code/bg-remove/> |
 | [`csv2vcf/`](csv2vcf/) | แปลงรายชื่อ CSV เป็นไฟล์ vCard (.vcf) มีทั้งหน้าเว็บ คำสั่งในเทอร์มินัล และเว็บที่รันเอง | <https://envburiramclub.github.io/claude-code/csv2vcf/> |
 | [`doc2pdf/`](doc2pdf/) | สแกนเอกสารเป็น PDF ครอปอัตโนมัติ OCR และแปลง PDF เป็นรูปหรือ Word | <https://envburiramclub.github.io/claude-code/doc2pdf/> |
+| [`file-share/`](file-share/) | ฝากไฟล์ไม่เกิน 100 MB ไปยัง Google Drive, OneDrive ของผู้ใช้เอง หรือเว็บฝากไฟล์ฟรี พร้อมลิงก์แชร์ | <https://envburiramclub.github.io/claude-code/file-share/> |
 | [`pdfedit/`](pdfedit/) | แก้ไข PDF: เพิ่มข้อความไทย ลายเซ็น รูป จัดการหน้า ตั้งรหัสผ่าน แปลงเป็นรูป และสรุป/ถามตอบด้วย AI | <https://envburiramclub.github.io/claude-code/pdfedit/> |
 | [`qrcode-generator/`](qrcode-generator/) | สร้าง QR Code จากลิงก์ ข้อความ WiFi เบอร์โทร อีเมล และพร้อมเพย์ ใส่โลโก้ ดาวน์โหลด PNG/SVG | <https://envburiramclub.github.io/claude-code/qrcode-generator/> |
 
