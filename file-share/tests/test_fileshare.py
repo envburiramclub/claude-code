@@ -175,6 +175,13 @@ class CoreTest(unittest.TestCase):
     def test_free_host_responses(self):
         self.assertEqual(self.call("tmpfilesLinks", {"status": "success", "data": {"url": "http://tmpfiles.org/123/a b.png"}}),
                          {"page": "https://tmpfiles.org/123/a%20b.png", "direct": "https://tmpfiles.org/dl/123/a%20b.png"})
+        # รหัสแบบใหม่เป็นตัวอักษรผสม (พบจากการใช้งานจริง 30 ก.ย. 2569) ต้องได้ลิงก์ดาวน์โหลดตรงด้วย
+        self.assertEqual(self.call("tmpfilesLinks", {"status": "success", "data": {"url": "http://tmpfiles.org/wsARwlEoEnhy/screenshot.png"}}),
+                         {"page": "https://tmpfiles.org/wsARwlEoEnhy/screenshot.png", "direct": "https://tmpfiles.org/dl/wsARwlEoEnhy/screenshot.png"})
+        # รูปแบบที่ไม่รู้จัก หรือเป็นลิงก์ /dl/ อยู่แล้ว → ไม่เดา ใช้ลิงก์เดิม
+        for odd in ("https://tmpfiles.org/dl/abc/a.png", "https://tmpfiles.org/abc", "https://tmpfiles.org/a/b/c.png"):
+            with self.subTest(url=odd):
+                self.assertEqual(self.call("tmpfilesLinks", {"status": "success", "data": {"url": odd}}), {"page": odd, "direct": odd})
         for bad in ({"status": "error"}, {"status": "success", "data": {"url": "https://evil.net/1/a"}},
                     {"status": "success", "data": {"url": "javascript:alert(1)"}}, None, "x"):
             self.assertIsNone(self.call("tmpfilesLinks", bad), bad)

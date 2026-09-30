@@ -265,13 +265,16 @@
     return u.href;
   }
 
-  /** tmpfiles.org: {status:'success', data:{url:'https://tmpfiles.org/123/a.png'}} → หน้าไฟล์และลิงก์ดาวน์โหลดตรง (/dl/) */
+  /**
+   * tmpfiles.org: {status:'success', data:{url:'https://tmpfiles.org/<รหัส>/a.png'}} → หน้าไฟล์และลิงก์ดาวน์โหลดตรง (/dl/<รหัส>/a.png)
+   * รหัสเดิมเป็นตัวเลขล้วน (/123/) ตอนนี้เป็นตัวอักษรผสม (/wsARwlEoEnhy/) — รับทั้งสองแบบ
+   */
   function tmpfilesLinks(json) {
     var url = json && json.status === 'success' && json.data ? json.data.url : null;
     var page = safeLink(str(url).replace(/^http:\/\//i, 'https://'), PROVIDERS.tmpfiles.links);
     if (!page) return null;
     var u = new URL(page);
-    if (!/^\/[0-9]+\//.test(u.pathname)) return { page: page, direct: page };
+    if (!/^\/[A-Za-z0-9_-]{1,64}\/[^/]+$/.test(u.pathname) || /^\/dl\//i.test(u.pathname)) return { page: page, direct: page };
     u.pathname = '/dl' + u.pathname;
     return { page: page, direct: u.href };
   }
