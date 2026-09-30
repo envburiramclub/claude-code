@@ -193,6 +193,32 @@
     return 'ใช้ได้เฉพาะบัญชีองค์กร/โรงเรียน (Microsoft 365) — ' + org;
   }
 
+  // รหัส error ของ Microsoft ที่เกิดจากการตั้งค่าแอปผิด → คำแนะนำภาษาไทย (วิธีแก้อยู่ในตารางของ README.md)
+  var AUTH_HINTS = [
+    [['AADSTS70002', 'AADSTS7000218', 'AADSTS9002326'],
+      'ผู้ดูแลระบบลงทะเบียน redirect URI ของแอป Microsoft เป็นแพลตฟอร์ม Web ต้องย้ายไปเป็น Single-page application (ระบบนี้ไม่ใช้ Client Secret)'],
+    [['AADSTS9002331', 'AADSTS50194'], 'ประเภทบัญชีของแอป Microsoft ไม่ตรงกับ microsoftAuthority ใน js/config.js'],
+    [['AADSTS50011'], 'ผู้ดูแลระบบยังไม่ได้ลงทะเบียน redirect URI ของหน้านี้กับแอป Microsoft'],
+    [['AADSTS65001'], 'ยังไม่ได้อนุญาตสิทธิ์ให้แอป ลองเข้าสู่ระบบใหม่แล้วกดยอมรับ']
+  ];
+
+  /**
+   * ข้อความแจ้งผู้ใช้เมื่อเข้าสู่ระบบไม่สำเร็จ (error/error_description มาจากเซิร์ฟเวอร์ ไม่น่าเชื่อถือ — แสดงด้วย textContent)
+   * ตัด Trace ID / Correlation ID / Timestamp ที่ยาวออก จำกัดความยาว และเติมคำแนะนำของรหัสที่รู้จัก
+   */
+  function authErrorText(error, description) {
+    var err = str(error).replace(/[^A-Za-z0-9_.-]/g, '').slice(0, 60) || 'error';
+    var d = str(description).replace(/\s+/g, ' ');
+    var cut = d.indexOf(' Trace ID:');
+    if (cut >= 0) d = d.slice(0, cut);
+    d = d.trim().slice(0, 200);
+    var code = (/AADSTS[0-9]{4,9}/.exec(d) || [''])[0];
+    for (var i = 0; code && i < AUTH_HINTS.length; i++) {
+      if (AUTH_HINTS[i][0].indexOf(code) >= 0) return 'เข้าสู่ระบบไม่สำเร็จ: ' + AUTH_HINTS[i][1] + ' (' + code + ')';
+    }
+    return 'เข้าสู่ระบบไม่สำเร็จ (' + err + ')' + (d ? ': ' + d : '');
+  }
+
   /** Client ID ที่ดูถูกต้อง (กันการตั้งค่าผิดจนส่งค่าแปลกไปหน้าเข้าสู่ระบบ) */
   function validClientId(kind, id) {
     var s = str(id).trim();
@@ -290,6 +316,7 @@
     microsoftTokenUrl: microsoftTokenUrl,
     authority: authority,
     msAccountsNote: msAccountsNote,
+    authErrorText: authErrorText,
     validClientId: validClientId,
     parseParams: parseParams,
     safeLink: safeLink,

@@ -67,7 +67,7 @@ https://envburiramclub.github.io/claude-code/file-share/index.html
 | Google: `Google Drive API has not been used in project` | ยังไม่ได้ Enable Google Drive API ในโปรเจกต์ |
 | Microsoft: `AADSTS50011` หรือ (บัญชีส่วนตัว) `invalid_request: The provided value for the input parameter 'redirect_uri' is not valid` | ยังไม่ได้ลงทะเบียน URL เต็มด้านบน: App registrations → แอป → Authentication → Add a platform → Single-page application → ใส่ URL เต็ม → Configure |
 | Microsoft: `AADSTS9002331` หรือ `AADSTS50194` | `microsoftAuthority` ไม่ตรงกับ Supported account types ของแอป |
-| Microsoft: `AADSTS9002326` หรือ `AADSTS7000218` | Redirect URI ลงทะเบียนเป็น Web แทน SPA |
+| Microsoft: `AADSTS70002: ... must include a 'client_secret'`, `AADSTS7000218` หรือ `AADSTS9002326` | Redirect URI ลงทะเบียนเป็น Web แทน SPA: Authentication → ลบ URL ใต้ Web → Add a platform → Single-page application → ใส่ URL เต็ม (ห้ามแก้ด้วยการสร้าง Client Secret) |
 
 ## ไฟล์
 

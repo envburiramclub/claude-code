@@ -113,6 +113,23 @@ class CoreTest(unittest.TestCase):
         self.assertEqual(notes[2], notes[3])  # tenant ID = บัญชีองค์กรเท่านั้น
         self.assertEqual(notes[4], notes[1])  # ค่าแปลก ๆ → common
 
+    def test_auth_error_text(self):
+        # ข้อความจริงจาก Microsoft เมื่อ redirect URI อยู่ใต้แพลตฟอร์ม Web แทน SPA
+        real = ("AADSTS70002: The provided request must include a 'client_secret' input parameter. "
+                "Trace ID: bc8d0ad3-3b6b-4898-b823-dec8bb500000 Correlation ID: 2173706d Timestamp: 2026-09-30")
+        msg = self.call("authErrorText", "invalid_client", real)
+        self.assertIn("Single-page application", msg)
+        self.assertTrue(msg.endswith("(AADSTS70002)"), msg)
+        self.assertNotIn("Trace ID", msg)
+        for code in ("AADSTS7000218", "AADSTS9002326", "AADSTS9002331", "AADSTS50011", "AADSTS65001"):
+            with self.subTest(code=code):
+                self.assertTrue(self.call("authErrorText", "x", code + ": text").endswith("(" + code + ")"))
+        # รหัสที่ไม่รู้จัก: แสดงข้อความเดิม (ตัด Trace ID, ขึ้นบรรทัด, จำกัดความยาว) และชื่อ error ที่ทำความสะอาดแล้ว
+        self.assertEqual(self.call("authErrorText", "server_error<b>", "AADSTS1234: a\nb Trace ID: 1"),
+                         "\u0e40\u0e02\u0e49\u0e32\u0e2a\u0e39\u0e48\u0e23\u0e30\u0e1a\u0e1a\u0e44\u0e21\u0e48\u0e2a\u0e33\u0e40\u0e23\u0e47\u0e08 (server_errorb): AADSTS1234: a b")
+        self.assertLess(len(self.call("authErrorText", "e" * 500, "d" * 5000)), 300)
+        self.assertIn("authErrorText(err, params.error_description)", read("js", "app.js"))
+
     def test_client_ids(self):
         self.assertEqual(self.many("validClientId", [["google", GID], ["google", " " + GID + " "], ["google", "abc"], ["google", GID + "/x"],
                                                      ["microsoft", MID], ["microsoft", "not-a-guid"], ["dropbox", MID]]),

@@ -170,8 +170,7 @@
   function authMessage(params) {
     var err = params.error;
     if (err === 'access_denied') return 'คุณยกเลิกการเข้าสู่ระบบ หรือไม่อนุญาตให้ระบบเข้าถึงไฟล์';
-    var desc = String(params.error_description || '').replace(/\s+/g, ' ').slice(0, 200);
-    return 'เข้าสู่ระบบไม่สำเร็จ (' + String(err).slice(0, 60) + ')' + (desc ? ': ' + desc : '');
+    return C.authErrorText(err, params.error_description);
   }
 
   /** กลับมาจากหน้าเข้าสู่ระบบ: อ่านผลจาก #fragment ตรวจ state แล้วลบออกจาก URL ทันที */
