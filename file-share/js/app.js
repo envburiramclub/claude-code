@@ -104,6 +104,7 @@
       }
       $('signed-out').hidden = !ok || !!s;
       $('btn-login').textContent = LOGIN_LABEL[choice];
+      $('ms-login-hint').hidden = choice !== 'onedrive';
       $('signed-in').hidden = !s;
       if (s) renderAccount(s);
     }

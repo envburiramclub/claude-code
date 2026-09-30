@@ -73,6 +73,7 @@ https://envburiramclub.github.io/claude-code/file-share/index.html
 | Google: ปุ่ม Publish app กดไม่ได้ และมีข้อความ `you must complete your configuration on the Branding page` | กรอกหน้า Branding ให้ครบตามขั้นตอนที่ 3 ด้านบน แล้วกลับไปกด Publish app |
 | Google: `Google Drive API has not been used in project` | ยังไม่ได้ Enable Google Drive API ในโปรเจกต์ |
 | Microsoft: `AADSTS50011` หรือ (บัญชีส่วนตัว) `invalid_request: The provided value for the input parameter 'redirect_uri' is not valid` | ยังไม่ได้ลงทะเบียน URL เต็มด้านบน: App registrations → แอป → Authentication → Add a platform → Single-page application → ใส่ URL เต็ม → Configure |
+| Microsoft (หน้า login.live.com): `server_error: The contextID supplied in the request did not have a matching cookie` | คุกกี้ของหน้าเข้าสู่ระบบ Microsoft ไม่ตรง (กดย้อนกลับ/รีเฟรช/ค้างหน้านานหรือเปิดหลายแท็บ ส่วนขยายบล็อกคุกกี้ หรือ Edge เข้าสู่ระบบ Microsoft อัตโนมัติ) ปิดหน้านั้นแล้วเริ่มจากหน้าฝากไฟล์ใหม่ ถ้ายังไม่ได้ลองหน้าต่าง InPrivate หรือลบคุกกี้ของ live.com — ไม่ใช่ปัญหาการตั้งค่าแอป |
 | Microsoft: `AADSTS9002331` หรือ `AADSTS50194` | `microsoftAuthority` ไม่ตรงกับ Supported account types ของแอป |
 | Microsoft: `AADSTS70002: ... must include a 'client_secret'`, `AADSTS7000218` หรือ `AADSTS9002326` | Redirect URI ลงทะเบียนเป็น Web แทน SPA: Authentication → ลบ URL ใต้ Web → Add a platform → Single-page application → ใส่ URL เต็ม (ห้ามแก้ด้วยการสร้าง Client Secret) |
 

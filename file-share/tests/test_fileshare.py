@@ -337,6 +337,9 @@ class StaticFilesTest(unittest.TestCase):
         self.assertIn("if (s && S.sessions[kind] !== s) return true;", app)
         self.assertIn("S.sessions[entry.target] !== entry.session", app)
         self.assertIn('id="ms-accounts"', self.page)
+        # คำแนะนำเมื่อหน้า login.live.com ขึ้น contextID/cookie error (แสดงเฉพาะเมื่อเลือก OneDrive)
+        self.assertIn('id="ms-login-hint" hidden', self.page)
+        self.assertIn("$('ms-login-hint').hidden = choice !== 'onedrive';", app)
         providers = self.js["providers.js"]
         # เปิดลิงก์แชร์ไม่ได้ (บัญชีองค์กรห้ามแชร์) ต้องไม่ทำให้การอัปโหลดที่สำเร็จแล้วกลายเป็นล้มเหลว
         google = providers[providers.index("var google = {"):providers.index("account: async function (session) {\n      var a")]

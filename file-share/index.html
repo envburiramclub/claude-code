@@ -85,6 +85,10 @@
       <div id="signed-out" hidden>
         <button type="button" id="btn-login" class="btn btn-primary"></button>
         <p class="hint">ระบบจะพาไปหน้าเข้าสู่ระบบของผู้ให้บริการ (ระบบนี้ไม่เห็นรหัสผ่านของคุณ) แล้วกลับมาหน้านี้</p>
+        <!-- error บนหน้า login.live.com เอง (ไม่ได้กลับมาหน้านี้ ระบบจึงแจ้งเองไม่ได้) — แสดงเฉพาะเมื่อเลือก OneDrive -->
+        <p class="hint" id="ms-login-hint" hidden>ถ้าหน้าของ Microsoft ขึ้น "The contextID supplied in the request did not have a matching cookie"
+          ให้ปิดหน้านั้น กลับมาหน้านี้แล้วกดเข้าสู่ระบบใหม่ (อย่ากดย้อนกลับหรือรีเฟรชหน้าของ Microsoft)
+          ถ้ายังไม่ได้ ให้ลองในหน้าต่าง InPrivate/ไม่ระบุตัวตน หรือลบคุกกี้ของ live.com</p>
       </div>
       <div id="signed-in" hidden>
         <p class="account"><span id="account-name"></span> <span id="account-email" class="muted"></span></p>
