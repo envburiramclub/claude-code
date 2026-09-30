@@ -331,7 +331,8 @@
     var tgt = target();
     var s = tgt === 'google' || tgt === 'onedrive' ? session(tgt) : null;
     if ((tgt === 'google' || tgt === 'onedrive') && !s) { render(); toast('กรุณาเข้าสู่ระบบก่อน', 'error'); return; }
-    var free = s && s.account && s.account.total ? s.account.total - s.account.used : Infinity;
+    // ใช้พื้นที่เกินโควตาอยู่แล้ว (used > total) → ว่าง 0 ไม่ใช่ติดลบ
+    var free = s && s.account && s.account.total ? Math.max(0, s.account.total - s.account.used) : Infinity;
     files.slice(0, 50).forEach(function (file) {
       var entry = { file: file, target: tgt, session: s, share: $('share').checked, status: 'waiting', loaded: 0, control: {}, node: el('li') };
       var err = C.checkFile(file, tgt);
@@ -344,6 +345,25 @@
     });
     if (files.length > 50) toast('เลือกได้ครั้งละไม่เกิน 50 ไฟล์', 'error');
     run();
+  }
+
+  /**
+   * ไฟล์จากการลากวาง — ข้ามโฟลเดอร์ (เบราว์เซอร์ให้มาเป็น File ที่อ่านไม่ได้ อัปโหลดแล้วขึ้นว่าเชื่อมต่อไม่ได้ ผิดสาเหตุ)
+   * ต้องเรียกระหว่าง event drop เท่านั้น (หลังจากนั้น dataTransfer อ่านไม่ได้แล้ว)
+   */
+  function droppedFiles(dt) {
+    var items = dt.items;
+    if (!items || !items.length || typeof items[0].webkitGetAsEntry !== 'function') return Array.prototype.slice.call(dt.files || []);
+    var files = [], folders = 0;
+    for (var i = 0; i < items.length; i++) {
+      if (items[i].kind !== 'file') continue;
+      var entry = items[i].webkitGetAsEntry();
+      if (entry && entry.isDirectory) { folders++; continue; }
+      var f = items[i].getAsFile();
+      if (f) files.push(f);
+    }
+    if (folders) toast('ฝากทั้งโฟลเดอร์ไม่ได้ (' + folders + ' โฟลเดอร์) — เลือกไฟล์ในโฟลเดอร์แทน หรือบีบอัดเป็น .zip ก่อน', 'error');
+    return files;
   }
 
   async function run() {
@@ -468,7 +488,7 @@
       e.preventDefault();
       dz.classList.remove('over');
       if ($('upload-card').hidden) { toast('เลือกที่ฝากไฟล์และเข้าสู่ระบบก่อน', 'error'); return; }
-      addFiles(e.dataTransfer.files);
+      addFiles(droppedFiles(e.dataTransfer));
     });
     window.addEventListener('beforeunload', function (e) {
       if (!S.queue.some(function (x) { return x.status === 'uploading' || x.status === 'waiting'; })) return;

@@ -404,6 +404,15 @@ class StaticFilesTest(unittest.TestCase):
                 self.assertEqual(got[1][1], "aexe.csv")  # ชื่อที่แสดงบนหน้าเว็บก็ตัดอักขระกลับทิศข้อความ
                 self.assertIn("displayName(candidate.name)", code)
 
+    def test_server_page_has_same_csp_as_webapp_header(self):
+        # web/index.html ถูกเผยแพร่บน GitHub Pages ด้วย ซึ่งตั้ง header ไม่ได้ — CSP ในหน้าต้องเท่ากับ header ของ webapp.py
+        page = self.read(os.path.join("web", "index.html"))
+        found = re.findall(r'<meta http-equiv="Content-Security-Policy" content="([^"]+)">', page)
+        header = dict(webapp.SECURITY_HEADERS)["Content-Security-Policy"]
+        expected = "; ".join(p.strip() for p in header.split(";") if p.strip() and not p.strip().startswith("frame-ancestors"))
+        self.assertEqual(found, [expected])
+        self.assertIn('<meta name="referrer" content="no-referrer">', page)
+
     def test_server_page_refuses_to_run_without_webapp(self):
         # web/index.html ถูกเผยแพร่บน GitHub Pages ด้วย (ที่ csv2vcf/web/) แต่ที่นั่นไม่มี /api/convert
         # หน้านั้นต้องไม่ส่งไฟล์ไปไหน และพาไปใช้เวอร์ชันที่แปลงในเบราว์เซอร์แทน

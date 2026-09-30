@@ -65,6 +65,7 @@ class Doc2pdfTest(unittest.TestCase):
             "  ..report.pdf . ": "report.pdf",
             "a/b:c*d": "a_b_c_d.pdf",
             "รายงาน\u202eFDP.exe": "รายงาน_FDP.exe.pdf",
+            "a\u200bb\u2060c\ufeffd\u061ce\u0085f": "a_b_c_d_e_f.pdf",  # อักขระล่องหน/ควบคุม C1
         }
         for name, expected in cases.items():
             with self.subTest(name=name):
@@ -138,6 +139,30 @@ class Doc2pdfTest(unittest.TestCase):
         value, ms = self.call("actualText", as_bytes(page(100)), 1)
         self.assertIsNone(value)  # อ่านไม่ได้ → ผู้เรียกใช้ข้อความจาก PDF.js ตามเดิม
         self.assertLess(ms, 20000)
+
+    def test_dense_tokens_are_limited(self):
+        # ฟอร์มที่อัด token เล็ก ๆ แน่น ๆ ("0 0 m " ~1 MB = 510,000 token) เรียกซ้ำ 2,000 ครั้ง: ไม่เกินเพดานไบต์เร็วพอ
+        # เดิมแยก token ~32 ล้านตัว ค้างหน้าเว็บ ~30 วินาทีต่อหน้า — ต้องหยุดที่เพดาน token ต่อหน้า
+        form = stream(b"/Type /XObject /Subtype /Form", b"q " + b"0 0 m " * 170000 + b"Q\n")
+        pdf = make_pdf({
+            1: b"<< /Type /Page /Resources << /XObject << /F 3 0 R >> >> /Contents 2 0 R >>",
+            2: stream(b"", ACTUAL_TEXT + b"/F Do\n" * 2000),
+            3: form,
+        })
+        value, ms = self.call("actualText", as_bytes(pdf), 1)
+        self.assertIsNone(value)  # อ่านไม่ได้ → ผู้เรียกใช้ข้อความจาก PDF.js ตามเดิม
+        self.assertLess(ms, 6000)
+        # ทุกหน้าเรียกฟอร์มหนักอันเดียวกัน: เกินเพดาน 3 หน้าแล้วหยุดอ่านทั้งไฟล์ (เดิม 15 หน้า = ค้างราว 7 นาที)
+        objs = {1000: stream(b"", b"/F Do\n" * 2000), 1001: form}
+        for i in range(1, 16):
+            objs[i] = b"<< /Type /Page /Resources << /XObject << /F 1001 0 R >> >> /Contents 1000 0 R >>"
+        value, ms = self.call("actualTextPages", as_bytes(make_pdf(objs)), list(range(1, 16)))
+        self.assertEqual(value, [None] * 15)
+        self.assertLess(ms, 15000)
+        # หน้าปกติที่มี token พอสมควรยังอ่านได้
+        busy = stream(b"", ACTUAL_TEXT + b"0 0 m " * 100000)
+        pdf = make_pdf({1: b"<< /Type /Page /Resources << >> /Contents 2 0 R >>", 2: busy})
+        self.assertEqual(self.call("actualText", as_bytes(pdf), 1)[0], [{"tag": "Span", "text": "\u0e17\u0e48"}])
 
     # -- ไฟล์ ZIP และ Word -----------------------------------------------------
 

@@ -4,6 +4,10 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="color-scheme" content="light dark">
+  <!-- webapp.py ส่ง CSP ทาง header อยู่แล้ว แต่ไฟล์นี้ถูกเผยแพร่บน GitHub Pages ด้วย (ตั้ง header ไม่ได้) จึงใส่ซ้ำในหน้า
+       ต้องตรงกับ SECURITY_HEADERS ใน webapp.py (ยกเว้น frame-ancestors ที่ใช้ใน meta ไม่ได้) — tests/test_static_site.py ตรวจ -->
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self'; connect-src 'self'; base-uri 'none'; form-action 'none'">
+  <meta name="referrer" content="no-referrer">
   <title>แปลงรายชื่อ CSV เป็น vCard</title>
   <!-- URL แบบ relative: webapp.py เปิดหน้านี้ที่ / ส่วนบน GitHub Pages ไฟล์นี้อยู่ที่ /claude-code/csv2vcf/web/ -->
   <link rel="stylesheet" href="style.css">

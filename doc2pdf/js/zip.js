@@ -60,7 +60,7 @@
   function create(entries, opts) {
     opts = opts || {};
     if (!Array.isArray(entries) || !entries.length) return Promise.reject(new Error('ไม่มีไฟล์ให้รวม'));
-    var names = {};
+    var names = Object.create(null); // ชื่อ "__proto__" ต้องไม่ถูกนับว่าซ้ำ
     for (var i = 0; i < entries.length; i++) {
       if (!validName(entries[i].name)) return Promise.reject(new Error('ชื่อไฟล์ใน ZIP ไม่ถูกต้อง: ' + entries[i].name));
       if (names[entries[i].name]) return Promise.reject(new Error('ชื่อไฟล์ซ้ำใน ZIP: ' + entries[i].name));

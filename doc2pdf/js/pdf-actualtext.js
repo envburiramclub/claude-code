@@ -31,6 +31,12 @@
   // รวมข้อมูลที่ไล่ต่อหน้า (ฟอร์มที่ถูกเรียกซ้ำนับทุกครั้ง) เท่ากับ content stream อันเดียวที่ใหญ่ที่สุดที่รับได้
   // ไม่งั้นฟอร์มเล็ก ๆ ที่คลายแล้วใหญ่ (zip bomb) ถูกเรียกซ้ำได้ถึง MAX_FORM_CALLS ครั้ง จนหน้าเว็บค้างเป็นชั่วโมง
   var MAX_WALK_BYTES = MAX_STREAM_BYTES;
+  // เพดานจำนวน token: ไฟล์ที่อัด token เล็ก ๆ ไว้แน่น (เช่น "0 0 m " ซ้ำ) ไม่เกินเพดานไบต์ แต่แยก token นานหลายสิบวินาที
+  // และโค้ดนี้ทำงานในหน้าเว็บ (หน้าค้าง) — หน้าเอกสารจริงที่ซับซ้อนมากมีราว 1 ล้าน token
+  var MAX_WALK_TOKENS = 2000000;             // ต่อหน้า
+  var MAX_HEAVY_PAGES = 3;                   // หน้าที่เกินเพดานข้างบนกี่หน้าแล้วเลิกอ่านทั้งไฟล์ (ทุกหน้าเรียกฟอร์มหนักอันเดียวกัน)
+  var MAX_DOC_TOKENS = 60000000;             // รวมทุกหน้า (หนังสือ 500 หน้าจริงใช้ราว 25 ล้าน) — ชั้นสุดท้ายถ้าทุกหน้าหนักเกือบถึงเพดาน
+  var YIELD_EVERY = 0x3FFFF;                 // คืนเวลาให้หน้าเว็บทุก ~260,000 token (ปุ่มยกเลิก/ความคืบหน้ายังทำงาน)
 
   function isWS(c) { return c === 0x20 || c === 0x0A || c === 0x0D || c === 0x09 || c === 0x0C || c === 0x00; }
   function isDelim(c) {
@@ -214,6 +220,8 @@
     this.cache = new Map();
     this.objStm = null;            // num → { data, at } จาก object stream (โหลดเมื่อจำเป็น)
     this.searchBudget = MAX_SEARCH_BYTES;
+    this.tokens = 0;               // token ที่ไล่ไปแล้วรวมทุกหน้า (เพดาน MAX_DOC_TOKENS)
+    this.heavyPages = 0;           // หน้าที่เกินเพดาน token ต่อหน้า (เพดาน MAX_HEAVY_PAGES)
     if (this.isEncrypted()) fail('encrypted');
     this.scan();
   }
@@ -383,7 +391,7 @@
 
   /** ไล่ content stream แบบเดียวกับ PDF.js getTextContent: BMC/BDC ตามลำดับ และเข้าไปในฟอร์ม XObject (Do) */
   Doc.prototype.walk = async function (data, resources, out, depth, chain, calls) {
-    calls = calls || { n: 0, bytes: 0 };
+    calls = calls || { n: 0, bytes: 0, tokens: 0, limit: MAX_WALK_TOKENS };
     calls.bytes += data.length;
     if (calls.bytes > MAX_WALK_BYTES) fail('page too large');
     var lx = new Lexer(data, 0, data.length, true);
@@ -391,6 +399,8 @@
     for (;;) {
       var tok = lx.next();
       if (!tok) break;
+      if (++calls.tokens > calls.limit) fail('page too complex');
+      if ((calls.tokens & YIELD_EVERY) === 0) await new Promise(function (r) { setTimeout(r, 0); });
       if (tok.t !== 'kw') {
         ops.push(lx.value(tok));
         if (ops.length > 10000) ops = [];
@@ -455,10 +465,17 @@
         try {
           if (!ref || typeof ref.num !== 'number') return null;
           var d = await doc();
+          if (d.tokens >= MAX_DOC_TOKENS || d.heavyPages >= MAX_HEAVY_PAGES) fail('document too complex');
           var page = await d.dictOf({ ref: ref.num, gen: ref.gen || 0 });
           if (!page) return null;
           var out = [];
-          await d.walk(await d.contentData(page.Contents), await d.pageResources(page), out, 0, []);
+          var calls = { n: 0, bytes: 0, tokens: 0, limit: Math.min(MAX_WALK_TOKENS, MAX_DOC_TOKENS - d.tokens) };
+          try {
+            await d.walk(await d.contentData(page.Contents), await d.pageResources(page), out, 0, [], calls);
+          } finally {
+            d.tokens += calls.tokens;
+            if (calls.tokens > calls.limit) d.heavyPages++;
+          }
           return out;
         } catch (e) {
           reader.lastError = e && e.message ? e.message : String(e); // ไฟล์เข้ารหัส/รูปแบบที่ไม่รองรับ — ผู้เรียกใช้ข้อความจาก PDF.js ตามเดิม

@@ -52,7 +52,8 @@
   function sanitizeFilename(name) {
     var n = String(name == null ? '' : name);
     if (n.normalize) n = n.normalize('NFC');
-    n = n.replace(/[\u0000-\u001f\u007f<>:"/\\|?*\u200e\u200f\u202a-\u202e\u2066-\u2069]+/g, '_');
+    // อักขระล่องหน (zero-width, word joiner, BOM) ก็ตัดด้วย — ชื่อที่เห็นต้องตรงกับชื่อจริง
+    n = n.replace(/[\u0000-\u001f\u007f-\u009f<>:"/\\|?*\u061c\u200b-\u200f\u202a-\u202e\u2060-\u2069\ufeff]+/g, '_');
     // ตัด .pdf ทั้งก่อนและหลังตัดส่วนเกินหน้า/ท้าย ("report.pdf " ต้องได้ report.pdf ไม่ใช่ report.pdf.pdf)
     n = trimName(trimName(n.replace(/\.pdf$/i, '')).replace(/\.pdf$/i, ''));
     if (n.length > 100) {

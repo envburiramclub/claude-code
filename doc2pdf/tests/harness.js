@@ -52,6 +52,13 @@ const API = {
     IDENTITY, UTIL,
   ).map((line) => line.text),
   actualText: (pdf, pageNum) => ctx.PdfActualText.create(async () => pdf).forPage({ num: pageNum, gen: 0 }),
+  // อ่านหลายหน้าด้วยตัวอ่านเดียวกัน (เพดานรวมทั้งไฟล์) → ผลของแต่ละหน้า
+  actualTextPages: async (pdf, pages) => {
+    const reader = ctx.PdfActualText.create(async () => pdf);
+    const out = [];
+    for (const p of pages) out.push(await reader.forPage({ num: p, gen: 0 }));
+    return out;
+  },
   xml: (text) => ctx.Docx.xml(text),
   zip: async (entries) => blobToBase64(await ctx.Zip.create(entries)),
   docx: async (opts) => blobToBase64(await ctx.Docx.create(opts)),
