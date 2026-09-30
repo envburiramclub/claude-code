@@ -184,6 +184,15 @@
     return 'common';
   }
 
+  /** ข้อความบอกผู้ใช้ว่าบัญชี Microsoft แบบไหนเข้าสู่ระบบได้ (ขึ้นกับ authority ที่ตั้งตามการลงทะเบียนแอป) */
+  function msAccountsNote(a) {
+    var s = authority(a);
+    if (s === 'consumers') return 'ใช้ได้เฉพาะบัญชี Microsoft ส่วนตัว (Outlook.com, Hotmail, Live) — บัญชีองค์กร/โรงเรียน (Microsoft 365) ใช้ไม่ได้';
+    var org = 'ผู้ดูแลขององค์กรอาจต้องอนุญาตแอปก่อน และอาจปิดลิงก์แชร์แบบไม่ต้องเข้าสู่ระบบ';
+    if (s === 'common') return 'ใช้ได้ทั้งบัญชีส่วนตัว (Outlook/Hotmail) และบัญชีองค์กร/โรงเรียน — ' + org;
+    return 'ใช้ได้เฉพาะบัญชีองค์กร/โรงเรียน (Microsoft 365) — ' + org;
+  }
+
   /** Client ID ที่ดูถูกต้อง (กันการตั้งค่าผิดจนส่งค่าแปลกไปหน้าเข้าสู่ระบบ) */
   function validClientId(kind, id) {
     var s = str(id).trim();
@@ -280,6 +289,7 @@
     microsoftAuthUrl: microsoftAuthUrl,
     microsoftTokenUrl: microsoftTokenUrl,
     authority: authority,
+    msAccountsNote: msAccountsNote,
     validClientId: validClientId,
     parseParams: parseParams,
     safeLink: safeLink,

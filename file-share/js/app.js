@@ -84,6 +84,7 @@
       b.classList.toggle('active', on);
     });
     CHOICES.forEach(function (c) { $('limits-' + c).hidden = c !== choice; });
+    $('ms-accounts').textContent = C.msAccountsNote(MS_AUTHORITY);
     var needsLogin = choice === 'google' || choice === 'onedrive';
     var s = needsLogin ? session(choice) : null;
     $('account-card').hidden = !needsLogin;
@@ -235,20 +236,24 @@
     P[kind].account(s).then(function (a) {
       s.account = a;
       if (S.choice === kind) render();
-    }, function (e) { handleAuthError(kind, e); });
+    }, function (e) { handleAuthError(kind, e, s); });
   }
 
   function logout() {
     var kind = S.choice;
     var s = S.sessions[kind];
+    if (kind !== 'google' && kind !== 'onedrive') return;
     S.sessions[kind] = null;
+    S.queue.forEach(function (x) { if (x.session && x.session === s) cancelEntry(x); });
     if (s && kind === 'google') P.google.revoke(s);
     render();
     toast('ออกจากระบบแล้ว');
   }
 
-  function handleAuthError(kind, e) {
+  /** โทเคนหมดอายุ/ถูกยกเลิก → ออกจากระบบ (เฉพาะเมื่อข้อผิดพลาดมาจาก session ปัจจุบัน ไม่ใช่ session เก่าที่ค้างในคิว) */
+  function handleAuthError(kind, e, s) {
     if (e && e.auth) {
+      if (s && S.sessions[kind] !== s) return true;
       S.sessions[kind] = null;
       render();
       toast('การเข้าสู่ระบบ ' + C.provider(kind).label + ' หมดอายุ กรุณาเข้าสู่ระบบใหม่', 'error');
@@ -348,6 +353,12 @@
       for (;;) {
         var entry = S.queue.filter(function (e) { return e.status === 'waiting'; })[0];
         if (!entry) break;
+        if (entry.session && (S.sessions[entry.target] !== entry.session || !session(entry.target))) {
+          entry.status = 'error';
+          entry.message = 'ออกจากระบบหรือการเข้าสู่ระบบหมดอายุก่อนถึงคิว กรุณาเข้าสู่ระบบแล้วเลือกไฟล์ใหม่';
+          renderEntry(entry);
+          continue;
+        }
         entry.status = 'uploading';
         renderEntry(entry);
         try {
@@ -361,7 +372,7 @@
         } catch (e) {
           entry.status = e && e.cancelled ? 'cancelled' : 'error';
           entry.message = errorText(e);
-          if (e && e.auth) handleAuthError(entry.target, e);
+          if (e && e.auth) handleAuthError(entry.target, e, entry.session);
         }
         renderEntry(entry);
       }
@@ -412,7 +423,7 @@
           del.disabled = true;
           P[kind].remove(s, f.id).then(function () { toast('ลบไฟล์แล้ว (กู้คืนได้จากถังขยะ)', 'ok'); refreshFiles(); loadAccount(kind); }, function (e) {
             del.disabled = false;
-            if (!handleAuthError(kind, e)) toast(errorText(e), 'error');
+            if (!handleAuthError(kind, e, s)) toast(errorText(e), 'error');
           });
         });
         actions.appendChild(del);
@@ -421,7 +432,7 @@
       });
     }, function (e) {
       if (seq !== listSeq) return;
-      if (!handleAuthError(kind, e)) $('files-status').textContent = 'โหลดรายการไม่สำเร็จ: ' + errorText(e);
+      if (!handleAuthError(kind, e, s)) $('files-status').textContent = 'โหลดรายการไม่สำเร็จ: ' + errorText(e);
     });
   }
 

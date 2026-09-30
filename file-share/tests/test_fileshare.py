@@ -105,6 +105,14 @@ class CoreTest(unittest.TestCase):
                          ["consumers", "organizations", MID, "common", "common"])
         self.assertEqual(self.call("microsoftTokenUrl", "consumers"), "https://login.microsoftonline.com/consumers/oauth2/v2.0/token")
 
+    def test_microsoft_account_note(self):
+        notes = self.many("msAccountsNote", [["consumers"], ["common"], ["organizations"], [MID], ["../x"]])
+        self.assertIn("\u0e40\u0e09\u0e1e\u0e32\u0e30\u0e1a\u0e31\u0e0d\u0e0a\u0e35 Microsoft \u0e2a\u0e48\u0e27\u0e19\u0e15\u0e31\u0e27", notes[0])  # เฉพาะบัญชี Microsoft ส่วนตัว
+        self.assertIn("\u0e43\u0e0a\u0e49\u0e44\u0e21\u0e48\u0e44\u0e14\u0e49", notes[0])  # องค์กรใช้ไม่ได้
+        self.assertIn("\u0e17\u0e31\u0e49\u0e07", notes[1])  # ใช้ได้ทั้งสองแบบ
+        self.assertEqual(notes[2], notes[3])  # tenant ID = บัญชีองค์กรเท่านั้น
+        self.assertEqual(notes[4], notes[1])  # ค่าแปลก ๆ → common
+
     def test_client_ids(self):
         self.assertEqual(self.many("validClientId", [["google", GID], ["google", " " + GID + " "], ["google", "abc"], ["google", GID + "/x"],
                                                      ["microsoft", MID], ["microsoft", "not-a-guid"], ["dropbox", MID]]),
@@ -273,6 +281,25 @@ class StaticFilesTest(unittest.TestCase):
         self.assertRegex(ids["googleClientId"], r"^$|^[0-9]{6,20}-[a-z0-9]{10,64}\.apps\.googleusercontent\.com$")
         self.assertRegex(ids["microsoftClientId"], r"^$|^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$")
         self.assertNotRegex(cfg, r"(?i)secret\s*[:=]|GOCSPX-|client_secret")
+        # authority ต้องเป็นค่าที่ Microsoft รู้จัก และตรงกับการลงทะเบียนแอป (แอปนี้เป็น Personal Microsoft accounts only)
+        self.assertRegex(ids["microsoftAuthority"], r"^(common|consumers|organizations|[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})$")
+        if ids["microsoftClientId"] == "8eeb9af7-8531-429d-83e9-ef647592850a":
+            self.assertEqual(ids["microsoftAuthority"], "consumers")  # common → AADSTS9002331 ตอนแลกรหัสเข้าสู่ระบบ
+
+    def test_session_safety(self):
+        app = self.js["app.js"]
+        # ออกจากระบบแล้วต้องยกเลิกไฟล์ที่ค้างในคิว ไม่ให้อัปโหลดเข้าบัญชีที่เข้าสู่ระบบทีหลัง
+        logout = app[app.index("function logout()"):app.index("function handleAuthError")]
+        self.assertIn("cancelEntry(x)", logout)
+        # 401 จาก session เก่าต้องไม่ทำให้ session ใหม่หลุด
+        self.assertIn("if (s && S.sessions[kind] !== s) return true;", app)
+        self.assertIn("S.sessions[entry.target] !== entry.session", app)
+        self.assertIn('id="ms-accounts"', self.page)
+        providers = self.js["providers.js"]
+        # เปิดลิงก์แชร์ไม่ได้ (บัญชีองค์กรห้ามแชร์) ต้องไม่ทำให้การอัปโหลดที่สำเร็จแล้วกลายเป็นล้มเหลว
+        google = providers[providers.index("var google = {"):providers.index("account: async function (session) {\n      var a")]
+        self.assertIn("warning = 'อัปโหลดสำเร็จ แต่เปิดลิงก์แชร์ไม่ได้", google)
+        self.assertIn("if (e.status === 404) return { value: [] };", providers)
 
 
 if __name__ == "__main__":

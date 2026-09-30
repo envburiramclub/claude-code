@@ -7,7 +7,7 @@
 | ที่ฝาก | เข้าสู่ระบบ | ข้อจำกัดสำคัญ |
 | --- | --- | --- |
 | Google Drive | Gmail ของผู้ใช้เอง | ใช้พื้นที่ Drive ของผู้ใช้ (ฟรี 15 GB) ไฟล์อยู่ในโฟลเดอร์ "ระบบฝากไฟล์" และระบบเห็นเฉพาะไฟล์ที่อัปโหลดผ่านระบบนี้ |
-| Microsoft OneDrive | Outlook/Hotmail ของผู้ใช้เอง | ใช้พื้นที่ OneDrive ของผู้ใช้ (ฟรี 5 GB) ไฟล์อยู่ในโฟลเดอร์ Apps ของแอป บัญชีองค์กรอาจปิดลิงก์แชร์ |
+| Microsoft OneDrive | Outlook/Hotmail ของผู้ใช้เอง | ใช้พื้นที่ OneDrive ของผู้ใช้ (ฟรี 5 GB) ไฟล์อยู่ในโฟลเดอร์ Apps ของแอป ตอนนี้ตั้งค่าให้ใช้ได้เฉพาะบัญชี Microsoft ส่วนตัว |
 | tmpfiles.org | ไม่ต้อง | สาธารณะ ไม่เกิน 100 MB (ฐานสิบ) ลบอัตโนมัติหลัง 60 นาที |
 | Gofile.io | ไม่ต้อง | สาธารณะ ไฟล์ที่ไม่มีคนดาวน์โหลดนาน ๆ อาจถูกลบ ลบเองไม่ได้ |
 
@@ -23,7 +23,7 @@
 ต้องลงทะเบียนแอปกับ Google และ Microsoft แล้วใส่ Client ID ใน `js/config.js`
 Client ID ไม่ใช่ความลับ ใส่ใน repo ได้ **ไม่ต้องสร้างและห้ามใส่ Client Secret**
 
-redirect URI ที่ใช้ทั้งสองแห่ง (ต้องตรงทุกตัวอักษร):
+redirect URI ที่ใช้ทั้งสองแห่ง (ต้องเป็น URL เต็มนี้ตรงทุกตัวอักษร **ใส่แค่ `https://envburiramclub.github.io` ไม่ได้**):
 
 ```
 https://envburiramclub.github.io/claude-code/file-share/index.html
@@ -40,19 +40,33 @@ https://envburiramclub.github.io/claude-code/file-share/index.html
    - **Data Access:** เพิ่ม scope `https://www.googleapis.com/auth/drive.file`
      (สิทธิ์เฉพาะไฟล์ที่แอปสร้าง ไม่ใช่สิทธิ์อ่อนไหว จึงไม่ต้องขอตรวจสอบแอป)
 4. สร้าง Client ID: **Clients** → Create client → Web application
-   - Authorized JavaScript origins: `https://envburiramclub.github.io`
-   - Authorized redirect URIs: URL ด้านบน
+   - Authorized JavaScript origins: `https://envburiramclub.github.io` (โดเมนอย่างเดียว)
+   - Authorized redirect URIs: URL เต็มด้านบน (มี `/claude-code/file-share/index.html`)
+   - กด Save แล้วรอ 5 นาทีถึงไม่กี่ชั่วโมงให้ Google อัปเดต
 5. คัดลอก Client ID (ลงท้าย `.apps.googleusercontent.com`) ใส่ใน `googleClientId` ของ `js/config.js`
 
 ### Microsoft OneDrive
 
 1. เข้า <https://entra.microsoft.com/> → App registrations → New registration
    - Name: เช่น "ระบบฝากไฟล์" (OneDrive สร้างโฟลเดอร์ Apps/ชื่อนี้)
-   - Supported account types: "Accounts in any organizational directory and personal Microsoft accounts"
-     ถ้าเลือก "Personal Microsoft accounts only" ให้ตั้ง `microsoftAuthority: 'consumers'`
+   - Supported account types: ตั้ง `microsoftAuthority` ใน `js/config.js` ให้ตรงกัน
+     - "Personal Microsoft accounts only" → `'consumers'` (ค่าปัจจุบัน)
+     - "Accounts in any organizational directory and personal Microsoft accounts" → `'common'`
+     - "Accounts in any organizational directory" → `'organizations'`
    - Redirect URI: แพลตฟอร์ม **Single-page application (SPA)** และ URL ด้านบน (ต้องเป็น SPA ไม่งั้นแลกรหัสเข้าสู่ระบบไม่ได้)
 2. API permissions: Microsoft Graph → Delegated → `Files.ReadWrite` และ `User.Read`
 3. คัดลอก Application (client) ID ใส่ใน `microsoftClientId` ของ `js/config.js`
+
+### แก้ปัญหาเข้าสู่ระบบไม่ได้
+
+| ข้อความที่เห็น | สาเหตุและวิธีแก้ |
+| --- | --- |
+| Google: `Error 400: redirect_uri_mismatch` | Authorized redirect URIs ไม่มี URL เต็มด้านบน เพิ่มแล้วรอให้ Google อัปเดต |
+| Google: `Access blocked` หรือ `403: access_denied` | หน้ายินยอมยังเป็น Testing กด Publish app หรือเพิ่มอีเมลเป็น Test users |
+| Google: `Google Drive API has not been used in project` | ยังไม่ได้ Enable Google Drive API ในโปรเจกต์ |
+| Microsoft: `AADSTS50011` | Redirect URI ไม่ตรง หรือไม่ได้ลงทะเบียนเป็นแพลตฟอร์ม SPA |
+| Microsoft: `AADSTS9002331` หรือ `AADSTS50194` | `microsoftAuthority` ไม่ตรงกับ Supported account types ของแอป |
+| Microsoft: `AADSTS9002326` หรือ `AADSTS7000218` | Redirect URI ลงทะเบียนเป็น Web แทน SPA |
 
 ## ไฟล์
 

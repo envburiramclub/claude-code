@@ -281,6 +281,14 @@ class StaticFilesTest(unittest.TestCase):
         self.assertEqual(re.findall(r"localStorage\.(\w+)\((\w+)", app), [("getItem", "MODEL_KEY"), ("setItem", "MODEL_KEY")])
         self.assertIn("S.model = C.model(saved) ? saved", app)  # ตรวจค่าที่อ่านกลับมา (C.model ใช้ hasOwnProperty)
 
+    def test_decode_worker_not_killed_mid_job(self):
+        # ตัวจับเวลาปิด worker ถอดรหัสต้องเริ่มนับหลังงานเสร็จ ไม่ใช่ตอนเริ่ม (HEIC ใหญ่บนมือถือช้าใช้เวลาเกิน 30 วินาที)
+        app = self.js["app.js"]
+        decoder = app[app.index("function decoder()"):app.index("function decoderDone()")]
+        self.assertNotIn("setTimeout", decoder)
+        via = app[app.index("async function viaWorker"):app.index("async function decodeFile")]
+        self.assertRegex(via, r"finally \{\s*decoderDone\(\);")
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -128,7 +128,7 @@
         clearTimeout(timer);
         var latest = info && typeof info.commit === 'string' && HEX.test(info.commit) ? info.commit : null;
         if (!latest || (latest === commit && latest === pageCommit)) return true;
-        var key = 'app-reloaded-for-' + latest;
+        var key = 'doc2pdf:reloaded-for-' + latest; // sessionStorage ใช้ร่วมกับแอปอื่นในแท็บเดียวกัน — ขึ้นต้นด้วยชื่อโฟลเดอร์
         try {
           if (sessionStorage.getItem(key)) return true; // โหลดใหม่ไปแล้ว ไม่วนซ้ำ
           sessionStorage.setItem(key, '1');

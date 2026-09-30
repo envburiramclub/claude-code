@@ -303,6 +303,14 @@ class StaticFilesTest(unittest.TestCase):
         self.assertEqual(re.findall(r"\bfetch\(([^,)]+)", app), ["FONT_URL", "GEMINI_URL"])
         self.assertIn("isEvalSupported: false", app)
 
+    def test_stale_render_errors_are_ignored(self):
+        # หมุน/ลบ/เรียงหน้าระหว่างที่หน้าเดิมยังวาดไม่เสร็จ: ข้อผิดพลาดจากเอกสารเก่าต้องไม่เด้งแจ้งผู้ใช้
+        app = self.js["app.js"]
+        render = app[app.index("async function renderPage()"):app.index("function showPage(")]
+        self.assertIn("var stale = function () { return seq !== renderSeq || doc !== S.doc; };", render)
+        self.assertIn("page = await doc.getPage(S.page);", render)
+        self.assertIn("|| stale()) return;", render)
+
     def test_api_key_is_never_stored(self):
         app = self.js["app.js"]
         self.assertIn("var THEME_KEY = 'pdfedit:theme';", app)  # key ขึ้นต้นด้วยชื่อโฟลเดอร์

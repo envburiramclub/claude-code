@@ -56,15 +56,16 @@
 
   function httpError(res, what) {
     var msg = apiMessage(res.json);
-    var reason = res.json && res.json.error && Array.isArray(res.json.error.errors) && res.json.error.errors[0] ? res.json.error.errors[0].reason : '';
+    var reason = res.json && res.json.error && Array.isArray(res.json.error.errors) && res.json.error.errors[0] ? String(res.json.error.errors[0].reason || '') : '';
     var code = res.json && res.json.error && res.json.error.code;
-    if (res.status === 401) return userError('การเข้าสู่ระบบหมดอายุ กรุณาเข้าสู่ระบบใหม่', { auth: true });
-    if (reason === 'storageQuotaExceeded' || code === 'quotaLimitReached' || res.status === 507) return userError('พื้นที่เก็บไฟล์ของคุณเต็ม');
-    if (res.status === 413) return userError('ไฟล์ใหญ่เกินกว่าที่บริการรับได้');
-    if (res.status === 429 || /rateLimit/i.test(reason)) return userError('ใช้งานถี่เกินไป บริการปฏิเสธชั่วคราว ลองใหม่ภายหลัง');
-    if (res.status === 403) return userError('ไม่มีสิทธิ์' + what + (msg ? ' (' + msg + ')' : ''));
-    if (res.status >= 500) return userError('เซิร์ฟเวอร์ของผู้ให้บริการขัดข้อง (HTTP ' + res.status + ') ลองใหม่ภายหลัง');
-    return userError(what + 'ไม่สำเร็จ (HTTP ' + res.status + ')' + (msg ? ' ' + msg : ''));
+    var extra = { status: res.status };
+    if (res.status === 401) { extra.auth = true; return userError('การเข้าสู่ระบบหมดอายุ กรุณาเข้าสู่ระบบใหม่', extra); }
+    if (reason === 'storageQuotaExceeded' || code === 'quotaLimitReached' || res.status === 507) return userError('พื้นที่เก็บไฟล์ของคุณเต็ม', extra);
+    if (res.status === 413) return userError('ไฟล์ใหญ่เกินกว่าที่บริการรับได้', extra);
+    if (res.status === 429 || /rateLimit/i.test(reason)) return userError('ใช้งานถี่เกินไป บริการปฏิเสธชั่วคราว ลองใหม่ภายหลัง', extra);
+    if (res.status === 403) return userError('ไม่มีสิทธิ์' + what + (msg ? ' (' + msg + ')' : ''), extra);
+    if (res.status >= 500) return userError('เซิร์ฟเวอร์ของผู้ให้บริการขัดข้อง (HTTP ' + res.status + ') ลองใหม่ภายหลัง', extra);
+    return userError(what + 'ไม่สำเร็จ (HTTP ' + res.status + ')' + (msg ? ' ' + msg : ''), extra);
   }
 
   function api(method, url, token, body, what) {
@@ -132,24 +133,35 @@
         body: JSON.stringify({ name: name, parents: [folder] })
       }, control);
       if (init.status !== 200) throw httpError(init, 'เริ่มอัปโหลด');
-      var location = C.safeLink(init.header('Location'), ['www.googleapis.com']);
-      if (!location) throw userError('Google Drive ไม่ส่ง URL สำหรับอัปโหลดกลับมา');
+      var sessionUrl = C.safeLink(init.header('Location'), ['www.googleapis.com']);
+      // สำรอง: ถ้าเบราว์เซอร์อ่าน Location ไม่ได้ (CORS) ใช้รหัสอัปโหลดที่ Google เปิดให้อ่าน สร้าง URL เดียวกัน
+      var uploadId = sessionUrl ? '' : String(init.header('X-GUploader-UploadID') || '');
+      if (!sessionUrl && /^[A-Za-z0-9_-]{10,400}$/.test(uploadId)) {
+        sessionUrl = DRIVE_UPLOAD + '?uploadType=resumable&fields=id,name,size,webViewLink&upload_id=' + uploadId;
+      }
+      if (!sessionUrl) throw userError('Google Drive ไม่ส่ง URL สำหรับอัปโหลดกลับมา');
       var put = await xhr({
         method: 'PUT',
-        url: location,
+        url: sessionUrl,
         headers: { 'Content-Type': mime(file) },
         body: file,
         onProgress: onProgress
       }, control);
       if (put.status !== 200 && put.status !== 201) throw httpError(put, 'อัปโหลด');
       var f = put.json || {};
-      var shared = false;
+      var shared = false, warning = null;
       if (opts.share && f.id) {
-        await api('POST', DRIVE + '/files/' + encodeURIComponent(f.id) + '/permissions?fields=id', session.token,
-          { role: 'reader', type: 'anyone' }, 'เปิดลิงก์แชร์');
-        shared = true;
+        try {
+          await api('POST', DRIVE + '/files/' + encodeURIComponent(f.id) + '/permissions?fields=id', session.token,
+            { role: 'reader', type: 'anyone' }, 'เปิดลิงก์แชร์');
+          shared = true;
+        } catch (e) {
+          // บัญชีองค์กร/โรงเรียนบางแห่งห้ามแชร์ออกนอกองค์กร — ไฟล์อัปโหลดสำเร็จแล้ว แจ้งเตือนแต่ไม่ถือว่าล้มเหลว
+          if (e.auth) throw e;
+          warning = 'อัปโหลดสำเร็จ แต่เปิดลิงก์แชร์ไม่ได้: ' + (e.userMessage || 'ไม่ทราบสาเหตุ') + ' — ลิงก์นี้เปิดได้เฉพาะคุณ';
+        }
       }
-      return { name: f.name || name, size: Number(f.size) || file.size, id: f.id, link: driveLink(f), shared: shared };
+      return { name: f.name || name, size: Number(f.size) || file.size, id: f.id, link: driveLink(f), shared: shared, warning: warning };
     },
 
     account: async function (session) {
@@ -222,7 +234,14 @@
           res = null;
         }
         if (res && (res.status === 200 || res.status === 201)) { item = res.json || {}; break; }
-        if (res && res.status === 202) { var next = C.nextRange(res.json); pos = next >= 0 ? next : end + 1; retries = 0; continue; }
+        if (res && res.status === 202) {
+          var next = C.nextRange(res.json);
+          next = next >= 0 ? next : end + 1;
+          // ต้องได้ความคืบหน้าเสมอ (กันวนส่งช่วงเดิมไม่รู้จบถ้าเซิร์ฟเวอร์ตอบแปลก ๆ)
+          if (next <= pos || next > total) { if (++retries > 3) throw userError('OneDrive ไม่รับข้อมูลต่อ ลองใหม่ภายหลัง'); } else retries = 0;
+          pos = Math.min(Math.max(next, 0), total - 1);
+          continue;
+        }
         // 416 = ส่งช่วงที่ OneDrive ได้รับแล้ว → ถามตำแหน่งใหม่เหมือนกรณีเน็ตหลุด
         if (res && res.status < 500 && res.status !== 0 && res.status !== 416) throw httpError(res, 'อัปโหลด');
         // เน็ตหลุด/เซิร์ฟเวอร์ขัดข้อง: ถามว่าได้ถึงไหนแล้ว แล้วส่งต่อจากตรงนั้น (ไม่เกิน 3 ครั้ง)
@@ -230,7 +249,7 @@
         await new Promise(function (r) { setTimeout(r, 1500 * retries); });
         var status = await fetch(uploadUrl, { credentials: 'omit' }).then(function (r) { return r.json(); }).catch(function () { return null; });
         var n2 = C.nextRange(status);
-        if (n2 >= 0) pos = n2;
+        if (n2 >= 0 && n2 < total) pos = n2;
       }
       var id = itemId(item.id);
       var link = C.safeLink(item.webUrl, C.PROVIDERS.onedrive.links);
@@ -243,7 +262,7 @@
         } catch (e) {
           // บัญชีองค์กรบางแห่งปิดลิงก์แบบไม่ระบุตัวตน — อัปโหลดสำเร็จแล้ว แจ้งเตือนแต่ไม่ถือว่าล้มเหลว
           if (e.auth) throw e;
-          item.shareError = e.userMessage || 'สร้างลิงก์แชร์ไม่สำเร็จ';
+          item.shareError = 'อัปโหลดสำเร็จ แต่สร้างลิงก์แชร์ไม่ได้: ' + (e.userMessage || 'ไม่ทราบสาเหตุ') + ' — ลิงก์นี้เปิดได้เฉพาะคุณ';
         }
       }
       return { name: item.name || name, size: Number(item.size) || file.size, id: id, link: link, shared: shared, warning: item.shareError || null };
@@ -257,7 +276,9 @@
     },
 
     list: async function (session) {
-      var r = await api('GET', GRAPH + '/me/drive/special/approot/children?$top=100&$select=id,name,size,webUrl,createdDateTime,file', session.token, undefined, 'อ่านรายการไฟล์');
+      // ยังไม่เคยฝากไฟล์ = ยังไม่มีโฟลเดอร์ของแอป (404) → รายการว่าง
+      var r = await api('GET', GRAPH + '/me/drive/special/approot/children?$top=100&$select=id,name,size,webUrl,createdDateTime,file', session.token, undefined, 'อ่านรายการไฟล์')
+        .catch(function (e) { if (e.status === 404) return { value: [] }; throw e; });
       return (r.value || []).filter(function (f) { return f.file; }).map(function (f) {
         return { id: itemId(f.id), name: String(f.name || ''), size: Number(f.size) || 0, time: f.createdDateTime || '', link: C.safeLink(f.webUrl, C.PROVIDERS.onedrive.links) };
       }).sort(function (a, b) { return a.time < b.time ? 1 : -1; }).slice(0, 50);

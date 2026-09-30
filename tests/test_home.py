@@ -156,5 +156,36 @@ class HomePageTest(unittest.TestCase):
                     self.assertEqual(hidden, [])
         self.assertGreater(checked, 30)
 
+    def test_storage_keys_start_with_folder_name(self):
+        # localStorage/sessionStorage ใช้ร่วมกันทุกแอปใต้ envburiramclub.github.io — key ต้องขึ้นต้นด้วย "<โฟลเดอร์>:"
+        # ไม่งั้นแอปหนึ่งเขียนทับ/อ่านค่าของอีกแอปได้ (เช่น ocrLang)
+        call = re.compile(r"\b(?:localStorage|sessionStorage)\.(?:getItem|setItem|removeItem)\(\s*([^,)]+)")
+        checked = 0
+        for name in app_folders():
+            for folder, dirs, files in os.walk(os.path.join(ROOT, name)):
+                dirs[:] = sorted(d for d in dirs if not d.startswith((".", "_")) and d not in ("vendor", "tests"))
+                for fname in files:
+                    if not fname.endswith((".js", ".mjs")):
+                        continue
+                    path = os.path.join(folder, fname)
+                    code = read(path)
+                    for arg in call.findall(code):
+                        arg = arg.strip()
+                        with self.subTest(file=os.path.relpath(path, ROOT), key=arg):
+                            checked += 1
+                            if re.fullmatch(r"legacy|[A-Z_]*_LEGACY", arg):
+                                continue  # key เดิมที่ไม่มีคำนำหน้า: อ่านเป็นค่าสำรอง/ลบทิ้งเท่านั้น (ผู้ใช้ไม่เสียค่าที่ตั้งไว้)
+                            literal = re.match(r"'([^']*)'", arg)
+                            if literal:
+                                value = literal.group(1)
+                            else:
+                                ident = re.match(r"[A-Za-z_$][\w$]*", arg).group(0)
+                                found = re.search(r"\b%s\s*=\s*'([^']*)'" % re.escape(ident), code)
+                                self.assertIsNotNone(found, "ไม่พบค่าคงที่ของ key " + ident)
+                                value = found.group(1)
+                            self.assertTrue(value.startswith(name + ":"), "key ต้องขึ้นต้นด้วย %s: (ได้ %r)" % (name, value))
+        self.assertGreater(checked, 10)
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -326,9 +326,18 @@
   async function renderPage() {
     if (!S.doc) return;
     var seq = ++renderSeq;
+    var doc = S.doc;
+    // เอกสารถูกเปลี่ยน (หมุน/ลบ/เรียงหน้า) หรือสั่งวาดใหม่ระหว่างวาด: ข้อผิดพลาดของการวาดครั้งเก่าไม่ต้องแจ้งผู้ใช้
+    var stale = function () { return seq !== renderSeq || doc !== S.doc; };
     if (renderTask) { try { renderTask.cancel(); } catch (e) { /* ignore */ } }
-    var page = await S.doc.getPage(S.page);
-    if (seq !== renderSeq) return;
+    var page;
+    try {
+      page = await doc.getPage(S.page);
+    } catch (e0) {
+      if (stale()) return;
+      throw e0;
+    }
+    if (stale()) return;
     var base = page.getViewport({ scale: 1 });
     var ws = $('workspace');
     var avail = ws.clientWidth - (window.innerWidth < 768 ? 32 : 64);
@@ -351,12 +360,12 @@
     try {
       await task.promise;
     } catch (e) {
-      if (e && e.name === 'RenderingCancelledException') return;
+      if ((e && e.name === 'RenderingCancelledException') || stale()) return;
       throw e;
     } finally {
       if (renderTask === task) renderTask = null;
     }
-    if (seq !== renderSeq) return;
+    if (stale()) return;
     var wrapper = $('page-wrapper');
     $('pdf-canvas').replaceWith(canvas);
     wrapper.style.width = vp.width + 'px';

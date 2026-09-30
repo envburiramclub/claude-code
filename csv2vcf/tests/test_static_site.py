@@ -377,6 +377,33 @@ class StaticFilesTest(unittest.TestCase):
                 # บนคอมพิวเตอร์ยังกรองด้วยนามสกุล (Windows/Mac รู้จักนามสกุลดีกว่า MIME type)
                 self.assertIn('accept=".csv,.txt,text/csv"', self.read(name))
 
+    @unittest.skipUnless(NODE, "ต้องมี Node.js เพื่อรันโค้ด JavaScript")
+    def test_download_name_is_safe(self):
+        # ชื่อไฟล์ผลลัพธ์มาจากชื่อไฟล์ของผู้ใช้: อักขระกลับทิศข้อความทำให้ "a<U+202E>exe.csv" แสดงเป็นไฟล์ .exe
+        # จุดนำหน้าทำให้ได้ไฟล์ซ่อน และอักขระอย่าง : ? * ใช้ในชื่อไฟล์ Windows ไม่ได้
+        cases = [
+            ("contacts.csv", "contacts.vcf"),
+            ("a\u202eexe.csv", "aexe.vcf"),
+            ("\u200bphone\u2066book.txt", "phonebook.vcf"),
+            ("..hidden.csv", "hidden.vcf"),
+            ('a:b?c*"d<e>|f.csv', "a_b_c__d_e__f.vcf"),
+            ("\u0e23\u0e32\u0e22\u0e0a\u0e37\u0e48\u0e2d.csv", "\u0e23\u0e32\u0e22\u0e0a\u0e37\u0e48\u0e2d.vcf"),
+            (".csv", "contacts.vcf"),
+            ("", "contacts.vcf"),
+            ("x" * 400 + ".csv", "x" * 150 + ".vcf"),
+        ]
+        for name in ("app.js", os.path.join("web", "app.js")):
+            code = self.read(name)
+            funcs = code[code.index("  function displayName("):code.index("  function unescapeText(")]
+            script = funcs + "process.stdout.write(JSON.stringify(%s.map((n) => [vcfName(n), displayName(n)])));" % json.dumps([n for n, _ in cases])
+            out = subprocess.run([NODE, "-e", script], capture_output=True, timeout=60)
+            self.assertEqual(out.returncode, 0, out.stderr.decode("utf-8", "replace"))
+            got = json.loads(out.stdout.decode("utf-8"))
+            with self.subTest(file=name):
+                self.assertEqual([g[0] for g in got], [e for _, e in cases])
+                self.assertEqual(got[1][1], "aexe.csv")  # ชื่อที่แสดงบนหน้าเว็บก็ตัดอักขระกลับทิศข้อความ
+                self.assertIn("displayName(candidate.name)", code)
+
     def test_server_page_refuses_to_run_without_webapp(self):
         # web/index.html ถูกเผยแพร่บน GitHub Pages ด้วย (ที่ csv2vcf/web/) แต่ที่นั่นไม่มี /api/convert
         # หน้านั้นต้องไม่ส่งไฟล์ไปไหน และพาไปใช้เวอร์ชันที่แปลงในเบราว์เซอร์แทน

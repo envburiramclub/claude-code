@@ -887,7 +887,17 @@
   var camera = null;
   var cameraFailed = false;         // ใช้กล้องในแอปไม่ได้แล้วครั้งหนึ่ง → ครั้งต่อไปเปิดกล้องของเครื่องเลย
   var cameraPermission = 'unknown'; // สิทธิ์กล้องจาก Permissions API: granted | denied | prompt | unknown
-  var CAMERA_BLOCKED_KEY = 'inAppCameraBlocked';
+  // localStorage ใช้ร่วมกับทุกแอปใต้ envburiramclub.github.io: key ขึ้นต้นด้วยชื่อโฟลเดอร์เสมอ
+  // ยังไม่มีค่าใหม่ → อ่าน key เดิมที่ไม่มีคำนำหน้า (ผู้ใช้ไม่เสียค่าที่ตั้งไว้) แต่ไม่ลบ เพราะแอปอื่นอาจใช้ชื่อเดียวกัน
+  // ค่าที่อ่านได้ต้องตรวจก่อนใช้ทุกครั้ง (แอปอื่นเขียนทับได้)
+  var PREF_PREFIX = 'doc2pdf:';
+  function loadPref(name, legacy) {
+    var v = localStorage.getItem(PREF_PREFIX + name);
+    return v === null && legacy ? localStorage.getItem(legacy) : v;
+  }
+  function savePref(name, value) { localStorage.setItem(PREF_PREFIX + name, value); }
+  var CAMERA_BLOCKED_KEY = 'cameraBlocked';
+  var CAMERA_BLOCKED_LEGACY = 'inAppCameraBlocked';
   var CAMERA_BLOCKED_MS = 7 * 24 * 3600 * 1000;
 
   function openNativeCamera() {
@@ -898,14 +908,17 @@
   /** จำว่าเบราว์เซอร์นี้ไม่อนุญาตกล้องในแอป (เช่น เบราว์เซอร์ในแอป LINE ที่ Permissions API ไม่บอก) — ครั้งหน้าเปิดกล้องของเครื่องเลย */
   function rememberCameraBlocked(on) {
     try {
-      if (on) localStorage.setItem(CAMERA_BLOCKED_KEY, String(Date.now()));
-      else localStorage.removeItem(CAMERA_BLOCKED_KEY);
+      if (on) savePref(CAMERA_BLOCKED_KEY, String(Date.now()));
+      else {
+        localStorage.removeItem(PREF_PREFIX + CAMERA_BLOCKED_KEY);
+        localStorage.removeItem(CAMERA_BLOCKED_LEGACY); // ชื่อนี้ doc2pdf ตั้งเอง ลบได้ (ไม่งั้นอ่านค่าเดิมกลับมาอีก)
+      }
     } catch (_) { /* ignore */ }
   }
 
   function cameraBlockedRemembered() {
     try {
-      var t = Number(localStorage.getItem(CAMERA_BLOCKED_KEY));
+      var t = Number(loadPref(CAMERA_BLOCKED_KEY, CAMERA_BLOCKED_LEGACY));
       var age = Date.now() - t;
       return t > 0 && age >= 0 && age < CAMERA_BLOCKED_MS;
     } catch (_) {
@@ -1186,19 +1199,19 @@
 
   function bindExport() {
     try {
-      $('exOcr').checked = localStorage.getItem('pdfOcr') === '1';
-      var lang = localStorage.getItem('ocrLang');
+      $('exOcr').checked = loadPref('pdfOcr', 'pdfOcr') === '1';
+      var lang = loadPref('ocrLang', 'ocrLang');
       if (Ocr.LANGS.indexOf(lang) >= 0) $('exOcrLang').value = lang;
     } catch (_) { /* ignore */ }
     syncExportOcr();
     $('exOcr').addEventListener('change', function () {
-      try { localStorage.setItem('pdfOcr', $('exOcr').checked ? '1' : '0'); } catch (_) { /* ignore */ }
+      try { savePref('pdfOcr', $('exOcr').checked ? '1' : '0'); } catch (_) { /* ignore */ }
       syncExportOcr();
     });
     $('exOcrLang').addEventListener('change', function () {
       // ใช้ภาษาเดียวกับหน้าต่าง "แปลงภาพเป็นข้อความ"
       $('ocrLang').value = $('exOcrLang').value;
-      try { localStorage.setItem('ocrLang', $('exOcrLang').value); } catch (_) { /* ignore */ }
+      try { savePref('ocrLang', $('exOcrLang').value); } catch (_) { /* ignore */ }
     });
     $('btnExport').addEventListener('click', openExportDialog);
     $('exportForm').addEventListener('submit', function (e) {
@@ -1407,7 +1420,7 @@
 
   function bindOcr() {
     try {
-      var saved = localStorage.getItem('ocrLang');
+      var saved = loadPref('ocrLang', 'ocrLang');
       if (Ocr.LANGS.indexOf(saved) >= 0) $('ocrLang').value = saved;
     } catch (_) { /* ignore */ }
 
@@ -1420,7 +1433,7 @@
     });
     $('ocrLang').addEventListener('change', function () {
       $('exOcrLang').value = $('ocrLang').value;
-      try { localStorage.setItem('ocrLang', $('ocrLang').value); } catch (_) { /* ignore */ }
+      try { savePref('ocrLang', $('ocrLang').value); } catch (_) { /* ignore */ }
       if (isOcrOpen()) runOcr();
     });
     $('ocrClose').addEventListener('click', closeOcr);

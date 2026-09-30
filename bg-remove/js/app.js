@@ -150,8 +150,13 @@
   function decoder() {
     clearTimeout(decodeIdle);
     if (!decodeWorker || !decodeWorker.alive) decodeWorker = makeWorker('js/decode-worker.js');
-    decodeIdle = setTimeout(function () { if (decodeWorker) { decodeWorker.terminate(); decodeWorker = null; } }, 30000);
     return decodeWorker;
+  }
+
+  /** ปิด worker ถอดรหัสเมื่อว่าง 30 วินาที — นับหลังถอดรหัสเสร็จ (HEIC ใหญ่บนมือถือช้าอาจใช้เวลาเกิน 30 วินาที) */
+  function decoderDone() {
+    clearTimeout(decodeIdle);
+    decodeIdle = setTimeout(function () { if (decodeWorker) { decodeWorker.terminate(); decodeWorker = null; } }, 30000);
   }
 
   // ---------------------------------------------------------------- เปิดรูป
@@ -188,9 +193,14 @@
   }
 
   async function viaWorker(format, bytes) {
-    var r = await decoder().request({
-      type: 'decode', format: format, buffer: bytes.buffer, maxPixels: MAX_DECODE_PIXELS, fitPixels: MAX_PIXELS, maxSide: MAX_SIDE
-    }, [bytes.buffer]);
+    var r;
+    try {
+      r = await decoder().request({
+        type: 'decode', format: format, buffer: bytes.buffer, maxPixels: MAX_DECODE_PIXELS, fitPixels: MAX_PIXELS, maxSide: MAX_SIDE
+      }, [bytes.buffer]);
+    } finally {
+      decoderDone();
+    }
     if (!(r.width > 0 && r.height > 0) || !(r.data instanceof ArrayBuffer) || r.data.byteLength !== r.width * r.height * 4) {
       throw userError('ถอดรหัสรูปไม่สำเร็จ');
     }

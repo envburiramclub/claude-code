@@ -12,6 +12,9 @@ window.FILE_SHARE_CONFIG = {
   googleClientId: '362694565096-0bt17rd0eujd6inolfrsv200gahcc1gu.apps.googleusercontent.com',
   // Microsoft Entra ID (Azure) → App registrations → Application (client) ID (แพลตฟอร์ม Single-page application)
   microsoftClientId: '8eeb9af7-8531-429d-83e9-ef647592850a',
-  // 'common' = บัญชีส่วนตัว (outlook.com/hotmail) และบัญชีองค์กร, 'consumers' = บัญชีส่วนตัวเท่านั้น
-  microsoftAuthority: 'common'
+  // ต้องตรงกับ "Supported account types" ของแอปใน Entra ID:
+  //   'consumers' = Personal Microsoft accounts only (outlook.com/hotmail/live) — แอปนี้ลงทะเบียนแบบนี้
+  //   'common' = บัญชีส่วนตัวและบัญชีองค์กร, 'organizations' = บัญชีองค์กร/โรงเรียนเท่านั้น
+  // ถ้าไม่ตรง Microsoft จะปฏิเสธตอนแลกรหัสเข้าสู่ระบบ (AADSTS9002331 / AADSTS50194)
+  microsoftAuthority: 'consumers'
 };

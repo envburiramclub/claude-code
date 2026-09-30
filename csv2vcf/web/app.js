@@ -82,7 +82,7 @@
     }
     file = candidate;
     drop.classList.add("has-file");
-    $("drop-title").textContent = candidate.name;
+    $("drop-title").textContent = displayName(candidate.name) || "(ไม่มีชื่อ)";
     $("drop-hint").textContent = formatSize(candidate.size) + " · แตะเพื่อเปลี่ยนไฟล์";
     button.disabled = false;
     setStatus("");
@@ -218,8 +218,16 @@
     download.focus({ preventScroll: true });
   }
 
+  // ชื่อไฟล์สำหรับแสดง/ดาวน์โหลด: ตัดอักขระควบคุม อักขระล่องหน และอักขระกลับทิศข้อความ
+  // (ชื่ออย่าง "a" + U+202E + "exe.csv" แสดงเป็น "...vsc.exe" หลอกให้เข้าใจผิดว่าเป็นไฟล์โปรแกรม)
+  function displayName(name) {
+    return String(name || "").replace(/[\u0000-\u001F\u007F-\u009F\u200B-\u200F\u202A-\u202E\u2060-\u2069\uFEFF]/g, "");
+  }
+
+  // ชื่อไฟล์ผลลัพธ์: ตัดนามสกุลเดิม อักขระที่ใช้ในชื่อไฟล์ไม่ได้ และจุดนำหน้า (ไฟล์ซ่อน) จำกัดความยาว
   function vcfName(name) {
-    const base = name.replace(/\.[^.]*$/, "").trim();
+    const base = displayName(name).replace(/\.[^.]*$/, "").replace(/[<>:"|?*\\/]/g, "_")
+      .replace(/^[\s.]+/, "").slice(0, 150).trim();
     return (base || "contacts") + ".vcf";
   }
 

@@ -11,6 +11,15 @@
 
   var $ = function (id) { return document.getElementById(id); };
   var OCR_LANGS = ['tha+eng', 'tha', 'eng'];
+  // localStorage ใช้ร่วมกับทุกแอปใต้ envburiramclub.github.io: key ขึ้นต้นด้วยชื่อโฟลเดอร์เสมอ
+  // ยังไม่มีค่าใหม่ → อ่าน key เดิมที่ไม่มีคำนำหน้า (ผู้ใช้ไม่เสียค่าที่ตั้งไว้) แต่ไม่ลบ เพราะแอปอื่นอาจใช้ชื่อเดียวกัน
+  // ค่าที่อ่านได้ต้องตรวจก่อนใช้ทุกครั้ง (แอปอื่นเขียนทับได้)
+  var PREF_PREFIX = 'doc2pdf:';
+  function loadPref(name, legacy) {
+    var v = localStorage.getItem(PREF_PREFIX + name);
+    return v === null && legacy ? localStorage.getItem(legacy) : v;
+  }
+  function savePref(name, value) { localStorage.setItem(PREF_PREFIX + name, value); }
   var OCR_STATUS = {
     'loading tesseract core': 'กำลังโหลดตัวอ่านข้อความ…',
     'initializing tesseract': 'กำลังเตรียมตัวอ่านข้อความ…',
@@ -116,7 +125,7 @@
   function setFormat(f) {
     if (S.busy || (f !== 'jpg' && f !== 'docx')) return;
     S.format = f;
-    try { localStorage.setItem('pdfConvertFormat', f); } catch (_) { /* ignore */ }
+    try { savePref('pdfConvertFormat', f); } catch (_) { /* ignore */ }
     resetResult();
     syncForm();
   }
@@ -345,13 +354,13 @@
 
   function bind() {
     try {
-      var f = localStorage.getItem('pdfConvertFormat');
+      var f = loadPref('pdfConvertFormat', 'pdfConvertFormat');
       if (f === 'jpg' || f === 'docx') S.format = f;
-      var q = localStorage.getItem('pdfJpegQuality');
+      var q = loadPref('pdfJpegQuality', 'pdfJpegQuality');
       if (own(PdfTools.PRESETS, q)) $('pdfQuality').value = q;
-      var font = localStorage.getItem('pdfDocxFont');
+      var font = loadPref('pdfDocxFont', 'pdfDocxFont');
       if (own(PdfTools.FONTS, font)) $('pdfFont').value = font;
-      var lang = localStorage.getItem('ocrLang');
+      var lang = loadPref('ocrLang', 'ocrLang');
       if (OCR_LANGS.indexOf(lang) >= 0) $('pdfLang').value = lang;
     } catch (_) { /* ignore */ }
     // Android: หน้าเลือกไฟล์ของระบบกรองได้เฉพาะ MIME type (นามสกุล .pdf ใช้ไม่ได้) — Firefox บน Android ไม่กรองเลย
@@ -376,13 +385,13 @@
       if (on) on.focus();
     });
     $('pdfQuality').addEventListener('change', function () {
-      try { localStorage.setItem('pdfJpegQuality', $('pdfQuality').value); } catch (_) { /* ignore */ }
+      try { savePref('pdfJpegQuality', $('pdfQuality').value); } catch (_) { /* ignore */ }
     });
     $('pdfFont').addEventListener('change', function () {
-      try { localStorage.setItem('pdfDocxFont', $('pdfFont').value); } catch (_) { /* ignore */ }
+      try { savePref('pdfDocxFont', $('pdfFont').value); } catch (_) { /* ignore */ }
     });
     $('pdfLang').addEventListener('change', function () {
-      try { localStorage.setItem('ocrLang', $('pdfLang').value); } catch (_) { /* ignore */ }
+      try { savePref('ocrLang', $('pdfLang').value); } catch (_) { /* ignore */ }
     });
     $('pdfMode').addEventListener('change', syncForm);
     ['pdfQuality', 'pdfMode', 'pdfFont', 'pdfLang'].forEach(function (id) {
