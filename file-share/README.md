@@ -34,7 +34,13 @@ https://envburiramclub.github.io/claude-code/file-share/index.html
 1. เข้า <https://console.cloud.google.com/> แล้วสร้างโปรเจกต์ใหม่
 2. เปิด Google Drive API: APIs & Services → Library → "Google Drive API" → Enable
 3. ตั้งค่า Google Auth Platform (หน้ายินยอม OAuth):
-   - **Branding:** ชื่อแอป เช่น "ระบบฝากไฟล์" และอีเมลติดต่อ
+   - **Branding:** กรอกให้ครบก่อน ไม่งั้นปุ่ม Publish app กดไม่ได้ ("To publish your app, you must complete your configuration on the Branding page")
+     - App name: `ระบบฝากไฟล์` / User support email และ Developer contact information: อีเมลของผู้ดูแล
+     - App logo: **เว้นว่าง** (ใส่โลโก้แล้ว Google บังคับให้ส่งแอปตรวจสอบ)
+     - Application home page: `https://envburiramclub.github.io/claude-code/file-share/index.html`
+     - Application privacy policy link: `https://envburiramclub.github.io/claude-code/file-share/privacy.html`
+     - Application terms of service link: เว้นว่างได้
+     - Authorized domains: `envburiramclub.github.io`
    - **Audience:** External แล้วกด **Publish app** → Confirm (สถานะต้องเป็น In production)
      ถ้ายังเป็น Testing จะใช้ได้เฉพาะอีเมลที่เพิ่มเป็น Test users (รวมถึงบัญชีของผู้ดูแลเองด้วย)
      อย่าอัปโหลดโลโก้และอย่าเพิ่ม scope อื่น ไม่งั้น Google จะบังคับให้ส่งแอปตรวจสอบก่อน
@@ -64,6 +70,7 @@ https://envburiramclub.github.io/claude-code/file-share/index.html
 | --- | --- |
 | Google: `Error 400: redirect_uri_mismatch` | Authorized redirect URIs ไม่มี URL เต็มด้านบน เพิ่มแล้วรอให้ Google อัปเดต |
 | Google: `Access blocked: ... has not completed the Google verification process` และ `Error 403: access_denied` | หน้ายินยอมยังเป็น Testing: Google Auth Platform → Audience → Publish app (ทุกคนใช้ได้) หรือ Test users → Add users (เฉพาะอีเมลที่เพิ่ม) |
+| Google: ปุ่ม Publish app กดไม่ได้ และมีข้อความ `you must complete your configuration on the Branding page` | กรอกหน้า Branding ให้ครบตามขั้นตอนที่ 3 ด้านบน แล้วกลับไปกด Publish app |
 | Google: `Google Drive API has not been used in project` | ยังไม่ได้ Enable Google Drive API ในโปรเจกต์ |
 | Microsoft: `AADSTS50011` หรือ (บัญชีส่วนตัว) `invalid_request: The provided value for the input parameter 'redirect_uri' is not valid` | ยังไม่ได้ลงทะเบียน URL เต็มด้านบน: App registrations → แอป → Authentication → Add a platform → Single-page application → ใส่ URL เต็ม → Configure |
 | Microsoft: `AADSTS9002331` หรือ `AADSTS50194` | `microsoftAuthority` ไม่ตรงกับ Supported account types ของแอป |
@@ -74,6 +81,7 @@ https://envburiramclub.github.io/claude-code/file-share/index.html
 | ไฟล์ | หน้าที่ |
 | --- | --- |
 | `index.html`, `css/app.css`, `favicon.svg` | หน้าเว็บ (CSP อนุญาตสคริปต์จากเว็บนี้เท่านั้น และส่งข้อมูลได้เฉพาะ API ของที่ฝากไฟล์) |
+| `privacy.html` | นโยบายความเป็นส่วนตัว (Google ต้องใช้ลิงก์นี้ในหน้า Branding ก่อน Publish app) — ถ้าระบบเข้าถึงข้อมูลเพิ่ม ต้องแก้หน้านี้ด้วย |
 | `js/config.js` | Client ID ของ Google/Microsoft (ผู้ดูแลระบบใส่) |
 | `js/core.js` | ฟังก์ชันล้วน: ขีดจำกัดไฟล์, ชื่อไฟล์, URL เข้าสู่ระบบ, PKCE, ตรวจลิงก์จาก API |
 | `js/providers.js` | อัปโหลด/รายการ/ลบไฟล์ของ Google Drive, OneDrive, tmpfiles.org, Gofile ผ่าน REST API |

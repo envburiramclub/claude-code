@@ -262,6 +262,31 @@ class StaticFilesTest(unittest.TestCase):
                 self.assertTrue(os.path.isfile(os.path.join(ROOT, href)), href)
         self.assertIn("../index.html", [a.get("href") for t, a in self.tags if t == "a"])
 
+    def test_privacy_page(self):
+        # Google ต้องมีลิงก์นโยบายความเป็นส่วนตัว (หน้า Branding) ก่อน Publish app และหน้าแรกของแอปต้องลิงก์ไปหน้านี้
+        self.assertIn('href="privacy.html"', self.page)
+        page = read("privacy.html")
+        parser = _Tags()
+        parser.feed(page)
+        tags = parser.tags
+        csp = [a.get("content") for t, a in tags if t == "meta" and (a.get("http-equiv") or "").lower() == "content-security-policy"]
+        self.assertEqual(csp, ["default-src 'none'; style-src 'self'; img-src 'self'; base-uri 'none'; form-action 'none'"])
+        self.assertNotIn("<script", page)
+        self.assertNotIn("<style", page)
+        for tag, attrs in tags:
+            self.assertNotIn("style", attrs)
+            self.assertEqual([k for k in attrs if k.startswith("on")], [])
+            if tag == "a" and attrs.get("target") == "_blank":
+                self.assertEqual(attrs.get("rel"), "noopener noreferrer")
+            if tag == "link":
+                self.assertTrue(os.path.isfile(os.path.join(ROOT, attrs["href"])), attrs["href"])
+        self.assertIn("index.html", [a.get("href") for t, a in tags if t == "a"])
+        # เนื้อหาต้องตรงกับที่ระบบทำจริง: สิทธิ์ที่ขอ key ที่เก็บในเครื่อง และข้อความ Limited Use ของ Google
+        for text in ("drive.file", "Files.ReadWrite", "User.Read", "file-share:provider", "file-share:auth",
+                     "Google API Services User Data Policy", "Limited Use"):
+            self.assertIn(text, page)
+        self.assertIn("var GOOGLE_SCOPE = 'https://www.googleapis.com/auth/drive.file';", read("js", "core.js"))
+
     def test_file_picker_has_no_accept(self):
         pickers = [a for t, a in self.tags if t == "input" and a.get("type") == "file"]
         self.assertEqual(len(pickers), 1)
