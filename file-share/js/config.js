@@ -9,7 +9,7 @@
  */
 window.FILE_SHARE_CONFIG = {
   // Google Cloud Console → APIs & Services → Credentials → OAuth client ID (ชนิด Web application)
-  googleClientId: '',
+  googleClientId: '362694565096-0bt17rd0eujd6inolfrsv200gahcc1gu.apps.googleusercontent.com',
   // Microsoft Entra ID (Azure) → App registrations → Application (client) ID (แพลตฟอร์ม Single-page application)
   microsoftClientId: '',
   // 'common' = บัญชีส่วนตัว (outlook.com/hotmail) และบัญชีองค์กร, 'consumers' = บัญชีส่วนตัวเท่านั้น
